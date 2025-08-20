@@ -1,0 +1,63 @@
+name: hello-world-standalone
+version: 1.0.0
+description: "A standalone hello world plugin using the SDK"
+author: "MOPS Team"
+license: "MIT"
+homepage: "https://github.com/totmicro/mops-sdk"
+repository: "https://github.com/totmicro/mops-sdk"
+tags:
+  - "example"
+  - "standalone"
+  - "hello"
+
+# MOPS version compatibility
+mops_version:
+  min_version: "1.0.0"
+  max_version: "2.0.0"
+
+# Build targets for different platforms
+build_targets:
+  - os: linux
+    arch: amd64
+    output: hello-world-standalone-linux-amd64
+  - os: linux
+    arch: arm64
+    output: hello-world-standalone-linux-arm64
+  - os: darwin
+    arch: amd64
+    output: hello-world-standalone-darwin-amd64
+  - os: darwin
+    arch: arm64
+    output: hello-world-standalone-darwin-arm64
+  - os: windows
+    arch: amd64
+    output: hello-world-standalone-windows-amd64.exe
+
+# Default configuration for the plugin
+default_config:
+  greeting: "Hello"
+  enable_colors: true
+  timeout: 30
+
+# CLI commands provided by this plugin
+cli_commands:
+  - name: hello
+    description: "Print a hello message"
+    usage: "mops plugin hello-world-standalone hello [name]"
+    examples:
+      - "mops plugin hello-world-standalone hello"
+      - "mops plugin hello-world-standalone hello World"
+  
+  - name: greet
+    description: "Print a greeting in different languages"
+    usage: "mops plugin hello-world-standalone greet [lang] [name]"
+    examples:
+      - "mops plugin hello-world-standalone greet en World"
+      - "mops plugin hello-world-standalone greet es Mundo"
+  
+  - name: status
+    description: "Show plugin status and configuration"
+    usage: "mops plugin hello-world-standalone status [--verbose]"
+    examples:
+      - "mops plugin hello-world-standalone status"
+      - "mops plugin hello-world-standalone status --verbose"
