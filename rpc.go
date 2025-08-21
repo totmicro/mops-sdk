@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/rpc"
 	"os"
-	"strings"
 	"sync"
 	"time"
 
@@ -369,8 +368,7 @@ func (s *PluginRPCServer) CallInteractiveFunction(args *InteractiveFunctionCallA
 
 	outputChan := make(chan string, 1000)
 	inputChan := make(chan string, 100)
-
-	s.populateInputChannel(inputChan, args.Name)
+	defer close(inputChan)
 
 	errChan := make(chan error, 1)
 	go func() {
@@ -396,9 +394,7 @@ func (s *PluginRPCServer) CallInteractiveFunction(args *InteractiveFunctionCallA
 				}
 				goto done
 			}
-			if !s.isDebugMessage(line) {
-				output = append(output, line)
-			}
+			output = append(output, line)
 		case err := <-errChan:
 			funcError = err
 		case <-ctx.Done():
@@ -411,33 +407,6 @@ done:
 	resp.Output = output
 	resp.Error = funcError
 	return nil
-}
-
-func (s *PluginRPCServer) populateInputChannel(inputChan chan<- string, functionName string) {
-	defer close(inputChan)
-
-	switch functionName {
-	case "chat":
-		inputChan <- "Hello from test!"
-		inputChan <- "How are you?"
-		inputChan <- "quit"
-	default:
-		inputChan <- "test input"
-		inputChan <- "quit"
-	}
-}
-
-func (s *PluginRPCServer) isDebugMessage(line string) bool {
-	debugPatterns := []string{
-		"[SERVER DEBUG]", "[CLIENT DEBUG]", "🔧 [SERVER DEBUG]",
-		"✅ [SERVER DEBUG]", "❌ [SERVER DEBUG]", "⏰ [SERVER DEBUG]",
-	}
-	for _, pattern := range debugPatterns {
-		if strings.Contains(line, pattern) {
-			return true
-		}
-	}
-	return false
 }
 
 func (s *PluginRPCServer) GetCLICommands(args interface{}, resp *map[string]CLICommandInfo) error {

@@ -8,7 +8,6 @@ import (
 
 // PluginBuilder provides a fluent interface for creating plugins
 type PluginBuilder struct {
-	info PluginInfo
 	base *PluginBase
 }
 
@@ -36,59 +35,56 @@ func NewPluginBuilder(name, version, description string) *PluginBuilder {
 	base := NewPluginBase(info)
 	
 	return &PluginBuilder{
-		info: info,
 		base: base,
 	}
 }
 
+// getInfo returns a reference to the plugin info from the base
+func (b *PluginBuilder) getInfo() *PluginInfo {
+	return &b.base.info
+}
+
 // SetAuthor sets the plugin author
 func (b *PluginBuilder) SetAuthor(author string) *PluginBuilder {
-	b.info.Author = author
-	b.base.info.Author = author
+	b.getInfo().Author = author
 	return b
 }
 
 // SetLicense sets the plugin license
 func (b *PluginBuilder) SetLicense(license string) *PluginBuilder {
-	b.info.License = license
-	b.base.info.License = license
+	b.getInfo().License = license
 	return b
 }
 
 // SetHomepage sets the plugin homepage
 func (b *PluginBuilder) SetHomepage(homepage string) *PluginBuilder {
-	b.info.Homepage = homepage
-	b.base.info.Homepage = homepage
+	b.getInfo().Homepage = homepage
 	return b
 }
 
 // SetMopsVersions sets the MOPS version constraints
 func (b *PluginBuilder) SetMopsVersions(minVersion, maxVersion string) *PluginBuilder {
-	b.info.MopsMinVersion = minVersion
-	b.info.MopsMaxVersion = maxVersion
-	b.base.info.MopsMinVersion = minVersion
-	b.base.info.MopsMaxVersion = maxVersion
+	info := b.getInfo()
+	info.MopsMinVersion = minVersion
+	info.MopsMaxVersion = maxVersion
 	return b
 }
 
 // AddTag adds a tag to the plugin
 func (b *PluginBuilder) AddTag(tag string) *PluginBuilder {
-	b.info.Tags = append(b.info.Tags, tag)
-	b.base.info.Tags = append(b.base.info.Tags, tag)
+	b.getInfo().Tags = append(b.getInfo().Tags, tag)
 	return b
 }
 
 // AddDependency adds a dependency to the plugin
 func (b *PluginBuilder) AddDependency(dependency string) *PluginBuilder {
-	b.info.Dependencies = append(b.info.Dependencies, dependency)
-	b.base.info.Dependencies = append(b.base.info.Dependencies, dependency)
+	b.getInfo().Dependencies = append(b.getInfo().Dependencies, dependency)
 	return b
 }
 
 // SetDefaultConfig sets the default configuration
 func (b *PluginBuilder) SetDefaultConfig(config map[string]any) *PluginBuilder {
-	b.info.DefaultConfig = config
-	b.base.info.DefaultConfig = config
+	b.getInfo().DefaultConfig = config
 	return b
 }
 
@@ -116,8 +112,7 @@ func (b *PluginBuilder) WithCLICommand(name, description string, handler CLIComm
 		Name:        name,
 		Description: description,
 	}
-	b.info.CLICommands = append(b.info.CLICommands, cmdInfo)
-	b.base.info.CLICommands = append(b.base.info.CLICommands, cmdInfo)
+	b.getInfo().CLICommands = append(b.getInfo().CLICommands, cmdInfo)
 	b.base.WithCLICommand(name, handler)
 	return b
 }
@@ -130,7 +125,7 @@ func (b *PluginBuilder) WithMenuEntry(menuID string, entry MenuEntry) *PluginBui
 
 // WithMenuIntegration configures automatic menu integration
 func (b *PluginBuilder) WithMenuIntegration(autoRegister bool, key, label, icon string, priority int) *PluginBuilder {
-	b.info.MenuIntegration = &PluginMenuIntegration{
+	b.getInfo().MenuIntegration = &PluginMenuIntegration{
 		AutoRegister: autoRegister,
 		MenuID:       "main",
 		Key:          key,
@@ -139,14 +134,12 @@ func (b *PluginBuilder) WithMenuIntegration(autoRegister bool, key, label, icon 
 		Priority:     priority,
 		Group:        "plugins",
 	}
-	b.base.info.MenuIntegration = b.info.MenuIntegration
 	return b
 }
 
 // WithMenuIntegrationAdvanced configures automatic menu integration with all options
 func (b *PluginBuilder) WithMenuIntegrationAdvanced(integration PluginMenuIntegration) *PluginBuilder {
-	b.info.MenuIntegration = &integration
-	b.base.info.MenuIntegration = &integration
+	b.getInfo().MenuIntegration = &integration
 	return b
 }
 
@@ -154,7 +147,7 @@ func (b *PluginBuilder) WithMenuIntegrationAdvanced(integration PluginMenuIntegr
 
 // getStandardName creates a standardized name with plugin prefix
 func (b *PluginBuilder) getStandardName(componentName string) string {
-	return fmt.Sprintf("%s-%s", b.info.Name, componentName)
+	return fmt.Sprintf("%s-%s", b.getInfo().Name, componentName)
 }
 
 // WithStandardProvider adds a provider with standardized naming and type
@@ -203,7 +196,7 @@ func (b *PluginBuilder) WithStandardInteractiveFunction(functionName string, fun
 
 // WithUnifiedProvider adds a single unified provider that handles multiple contexts
 func (b *PluginBuilder) WithUnifiedProvider(description string) *UnifiedProviderBuilder {
-	pluginName := b.info.Name
+	pluginName := b.getInfo().Name
 	provider := NewUnifiedProvider(pluginName, description)
 	
 	return &UnifiedProviderBuilder{
@@ -262,8 +255,6 @@ func (b *PluginBuilder) WithMainMenuAndExecutor(description string, providerFunc
 	
 	return b
 }
-
-// Legacy support methods (deprecated but maintained for backward compatibility)
 
 // Build creates the plugin
 func (b *PluginBuilder) Build() Plugin {
