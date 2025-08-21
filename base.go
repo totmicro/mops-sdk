@@ -30,6 +30,10 @@ func NewPluginBase(info PluginInfo) *PluginBase {
 
 // GetInfo returns metadata about the plugin
 func (p *PluginBase) GetInfo() PluginInfo {
+	fmt.Printf("DEBUG SDK GetInfo: Plugin '%s' has %d presets\n", p.info.Name, len(p.info.ConfigPresets))
+	for name, preset := range p.info.ConfigPresets {
+		fmt.Printf("DEBUG SDK GetInfo: Preset '%s': %s\n", name, preset.Name)
+	}
 	return p.info
 }
 

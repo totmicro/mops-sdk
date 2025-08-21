@@ -22,6 +22,7 @@ func NewPluginBuilder(name, version, description string) *PluginBuilder {
 		Dependencies:   []string{},
 		CLICommands:    []CLICommandInfo{},
 		DefaultConfig:  make(map[string]any),
+		ConfigPresets:  make(map[string]ConfigPreset),
 		Platform:       GetCurrentPlatform(),
 		SupportedPlatforms: []PlatformInfo{
 			{OS: "linux", Arch: "amd64"},
@@ -47,6 +48,12 @@ func (b *PluginBuilder) getInfo() *PluginInfo {
 // SetAuthor sets the plugin author
 func (b *PluginBuilder) SetAuthor(author string) *PluginBuilder {
 	b.getInfo().Author = author
+	return b
+}
+
+// SetDisplayName sets the plugin display name for UI
+func (b *PluginBuilder) SetDisplayName(displayName string) *PluginBuilder {
+	b.getInfo().DisplayName = displayName
 	return b
 }
 
@@ -140,6 +147,17 @@ func (b *PluginBuilder) WithMenuIntegration(autoRegister bool, key, label, icon 
 // WithMenuIntegrationAdvanced configures automatic menu integration with all options
 func (b *PluginBuilder) WithMenuIntegrationAdvanced(integration PluginMenuIntegration) *PluginBuilder {
 	b.getInfo().MenuIntegration = &integration
+	return b
+}
+
+// WithConfigPreset adds a configuration preset
+func (b *PluginBuilder) WithConfigPreset(name, displayName, description string, config map[string]interface{}) *PluginBuilder {
+	preset := ConfigPreset{
+		Name:        displayName,
+		Description: description,
+		Config:      config,
+	}
+	b.getInfo().ConfigPresets[name] = preset
 	return b
 }
 

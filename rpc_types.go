@@ -10,6 +10,7 @@ type PluginInfoRPC struct {
 	Name              string            `json:"name"`
 	Version           string            `json:"version"`
 	Description       string            `json:"description"`
+	DisplayName       string            `json:"display_name,omitempty"` // Optional display name for UI
 	Author            string            `json:"author"`
 	License           string            `json:"license"`
 	Homepage          string            `json:"homepage"`
@@ -19,6 +20,7 @@ type PluginInfoRPC struct {
 	Tags              []string          `json:"tags"`
 	CLICommands       []CLICommandInfo  `json:"cli_commands"`
 	DefaultConfigJSON string            `json:"default_config_json"` // JSON-encoded config to avoid GOB issues
+	ConfigPresetsJSON string            `json:"config_presets_json"` // JSON-encoded presets to avoid GOB issues
 	Platform          PlatformInfo      `json:"platform"`
 	SupportedPlatforms []PlatformInfo   `json:"supported_platforms"`
 	MenuIntegration   *PluginMenuIntegration `json:"menu_integration,omitempty"` // Menu integration config
@@ -30,6 +32,7 @@ func (rpc *PluginInfoRPC) ToPluginInfo() (PluginInfo, error) {
 		Name:               rpc.Name,
 		Version:            rpc.Version,
 		Description:        rpc.Description,
+		DisplayName:        rpc.DisplayName,
 		Author:             rpc.Author,
 		License:            rpc.License,
 		Homepage:           rpc.Homepage,
@@ -52,6 +55,15 @@ func (rpc *PluginInfoRPC) ToPluginInfo() (PluginInfo, error) {
 		info.DefaultConfig = make(map[string]any)
 	}
 	
+	// Decode JSON presets
+	if rpc.ConfigPresetsJSON != "" {
+		if err := json.Unmarshal([]byte(rpc.ConfigPresetsJSON), &info.ConfigPresets); err != nil {
+			return info, fmt.Errorf("failed to decode config presets: %w", err)
+		}
+	} else {
+		info.ConfigPresets = make(map[string]ConfigPreset)
+	}
+	
 	return info, nil
 }
 
@@ -61,6 +73,7 @@ func NewPluginInfoRPC(info PluginInfo) (PluginInfoRPC, error) {
 		Name:               info.Name,
 		Version:            info.Version,
 		Description:        info.Description,
+		DisplayName:        info.DisplayName,
 		Author:             info.Author,
 		License:            info.License,
 		Homepage:           info.Homepage,
@@ -81,6 +94,15 @@ func NewPluginInfoRPC(info PluginInfo) (PluginInfoRPC, error) {
 			return rpc, fmt.Errorf("failed to encode default config: %w", err)
 		}
 		rpc.DefaultConfigJSON = string(configJSON)
+	}
+	
+	// Encode presets as JSON
+	if info.ConfigPresets != nil {
+		presetsJSON, err := json.Marshal(info.ConfigPresets)
+		if err != nil {
+			return rpc, fmt.Errorf("failed to encode config presets: %w", err)
+		}
+		rpc.ConfigPresetsJSON = string(presetsJSON)
 	}
 	
 	return rpc, nil

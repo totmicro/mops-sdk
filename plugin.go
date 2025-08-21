@@ -10,11 +10,19 @@ type PlatformInfo struct {
 	Arch string `json:"arch"`
 }
 
+// ConfigPreset represents a plugin configuration preset
+type ConfigPreset struct {
+	Name        string                 `json:"name"`
+	Description string                 `json:"description"`
+	Config      map[string]interface{} `json:"config"`
+}
+
 // PluginInfo contains metadata about a plugin
 type PluginInfo struct {
 	Name              string                 `json:"name"`
 	Version           string                 `json:"version"`
 	Description       string                 `json:"description"`
+	DisplayName       string                 `json:"display_name,omitempty"`  // Optional display name for UI
 	Author            string                 `json:"author"`
 	License           string                 `json:"license"`
 	Homepage          string                 `json:"homepage"`
@@ -24,6 +32,7 @@ type PluginInfo struct {
 	Tags              []string               `json:"tags"`
 	CLICommands       []CLICommandInfo       `json:"cli_commands"`
 	DefaultConfig     map[string]any         `json:"default_config"`
+	ConfigPresets     map[string]ConfigPreset `json:"config_presets,omitempty"`
 	Platform          PlatformInfo           `json:"platform"`
 	SupportedPlatforms []PlatformInfo        `json:"supported_platforms"`
 	MenuIntegration   *PluginMenuIntegration `json:"menu_integration,omitempty"`

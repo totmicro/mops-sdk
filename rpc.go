@@ -42,14 +42,19 @@ type PluginRPCClient struct {
 	client *rpc.Client
 }
 
-func (g *PluginRPCClient) GetInfo() PluginInfo {
+func (m *PluginRPCClient) GetInfo() (*PluginInfo, error) {
 	var resp PluginInfoRPC
-	err := g.client.Call("Plugin.GetInfo", new(interface{}), &resp)
+	err := m.client.Call("Plugin.GetInfo", new(interface{}), &resp)
 	if err != nil {
-		return PluginInfo{}
+		return nil, err
 	}
-	info, _ := resp.ToPluginInfo()
-	return info
+	
+	info, err := resp.ToPluginInfo()
+	if err != nil {
+		return nil, err
+	}
+	
+	return &info, nil
 }
 
 func (g *PluginRPCClient) Initialize(config map[string]any) error {
@@ -301,10 +306,12 @@ type PluginRPCServer struct {
 
 func (s *PluginRPCServer) GetInfo(args interface{}, resp *PluginInfoRPC) error {
 	info := s.Impl.GetInfo()
+	fmt.Printf("DEBUG RPC Server: GetInfo called, plugin has %d presets, DisplayName='%s'\n", len(info.ConfigPresets), info.DisplayName)
 	rpcInfo, err := NewPluginInfoRPC(info)
 	if err != nil {
 		return err
 	}
+	fmt.Printf("DEBUG RPC Server: After RPC conversion, presets JSON length: %d, RPC DisplayName='%s'\n", len(rpcInfo.ConfigPresetsJSON), rpcInfo.DisplayName)
 	*resp = rpcInfo
 	return nil
 }

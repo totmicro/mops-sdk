@@ -1,16 +1,16 @@
 # MOPS SDK
 
-The MOPS SDK provides a simple and powerful way to create plugins for the MOPS (Micro Operations System).
+The MOPS SDK provides a simple and powerful way to create plugins for the MOPS (Modular Operations Platform System).
 
 ## Overview
 
-MOPS is a terminal-based operations management system that supports extensible plugins. This SDK allows you to create plugins that can:
+The SDK enables developers to create plugins that integrate seamlessly with MOPS, providing:
 
-- Provide dynamic menu entries
-- Execute custom actions
-- Add interactive streaming functions
-- Extend CLI commands
-- Add menu entries to existing menus
+- Dynamic menu entries
+- Custom action execution
+- Interactive streaming functions
+- CLI command extensions
+- Configuration management
 
 ## Installation
 
@@ -20,18 +20,71 @@ go get github.com/totmicro/mops-sdk
 
 ## Quick Start
 
-Here's a simple "Hello World" plugin:
+Create a simple plugin:
 
 ```go
 package main
 
 import (
-    "fmt"
+    "context"
     "github.com/totmicro/mops-sdk"
 )
 
 func main() {
-    plugin := sdk.NewPluginBuilder("hello-world", "1.0.0", "A simple hello world plugin").
+    plugin := sdk.NewPluginBuilder("my-plugin", "1.0.0", "My first MOPS plugin").
+        AddExecutor("hello", func(ctx context.Context, params map[string]interface{}) (string, error) {
+            return "Hello from my plugin!", nil
+        }).
+        Build()
+
+    plugin.Start()
+}
+```
+
+## Features
+
+- **Plugin Builder**: Fluent API for plugin construction
+- **Action Executors**: Execute custom business logic
+- **Menu Providers**: Dynamic menu generation
+- **Interactive Functions**: Real-time user interaction
+- **CLI Commands**: Extend MOPS command-line interface
+- **Configuration**: Plugin-specific configuration management
+
+## Examples
+
+See the `examples/` directory for complete plugin examples:
+- `hello-world/` - Basic plugin with actions and interactive functions
+
+## Development
+
+### Building a Plugin
+```bash
+go build -o my-plugin .
+```
+
+### Testing with MOPS
+```bash
+# Copy plugin to MOPS plugins directory
+cp my-plugin ~/.mops/plugins/
+
+# Run MOPS
+mops
+```
+
+## Documentation
+
+- Plugin interface definitions in `plugin.go`
+- RPC implementation in `rpc.go`
+- Base plugin utilities in `base.go`
+- Builder pattern in `builder.go`
+
+## License
+
+MIT License - See LICENSE file for details.
+)
+
+func main() {
+    plugin := sdk.NewPluginBuilder("env-manager", "1.0.0", "A simple environment manager plugin").
         SetAuthor("Your Name").
         SetLicense("MIT").
         WithSimpleExecutor("hello", func(entry sdk.MenuEntry, input string) sdk.ActionResult {
@@ -222,7 +275,7 @@ cli_commands:
 
 Check the `examples/` directory for complete plugin examples:
 
-- `hello-world/` - Basic plugin with action executor
+- `env-manager/` - Basic plugin with action executor
 - `file-manager/` - Plugin with dynamic providers
 - `interactive-demo/` - Plugin with interactive functions
 - `cli-tools/` - Plugin with CLI commands
