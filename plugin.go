@@ -12,20 +12,21 @@ type PlatformInfo struct {
 
 // PluginInfo contains metadata about a plugin
 type PluginInfo struct {
-	Name              string            `json:"name"`
-	Version           string            `json:"version"`
-	Description       string            `json:"description"`
-	Author            string            `json:"author"`
-	License           string            `json:"license"`
-	Homepage          string            `json:"homepage"`
-	MopsMinVersion    string            `json:"mops_min_version"`
-	MopsMaxVersion    string            `json:"mops_max_version"`
-	Dependencies      []string          `json:"dependencies"`
-	Tags              []string          `json:"tags"`
-	CLICommands       []CLICommandInfo  `json:"cli_commands"`
-	DefaultConfig     map[string]any    `json:"default_config"`
-	Platform          PlatformInfo      `json:"platform"`
-	SupportedPlatforms []PlatformInfo   `json:"supported_platforms"`
+	Name              string                 `json:"name"`
+	Version           string                 `json:"version"`
+	Description       string                 `json:"description"`
+	Author            string                 `json:"author"`
+	License           string                 `json:"license"`
+	Homepage          string                 `json:"homepage"`
+	MopsMinVersion    string                 `json:"mops_min_version"`
+	MopsMaxVersion    string                 `json:"mops_max_version"`
+	Dependencies      []string               `json:"dependencies"`
+	Tags              []string               `json:"tags"`
+	CLICommands       []CLICommandInfo       `json:"cli_commands"`
+	DefaultConfig     map[string]any         `json:"default_config"`
+	Platform          PlatformInfo           `json:"platform"`
+	SupportedPlatforms []PlatformInfo        `json:"supported_platforms"`
+	MenuIntegration   *PluginMenuIntegration `json:"menu_integration,omitempty"`
 }
 
 // CLICommandInfo describes a CLI command provided by the plugin
@@ -62,20 +63,32 @@ type Registry interface {
 	ListExecutors() []string
 }
 
+// PluginMenuIntegration defines how a plugin integrates with MOPS menus
+type PluginMenuIntegration struct {
+	AutoRegister bool   `yaml:"auto_register"` // Whether to automatically add to main menu
+	MenuID       string `yaml:"menu_id"`       // Which menu to integrate with (default: "main")
+	Key          string `yaml:"key"`           // Shortcut key for the menu entry
+	Label        string `yaml:"label"`         // Display label for the menu entry
+	Icon         string `yaml:"icon"`          // Optional icon/emoji for the menu entry
+	Priority     int    `yaml:"priority"`      // Priority for ordering (lower = higher priority)
+	Group        string `yaml:"group"`         // Optional grouping for organizing menu items
+}
+
 // PluginMetadata represents the plugin.yaml file structure
 type PluginMetadata struct {
-	Name         string                `yaml:"name"`
-	Version      string                `yaml:"version"`
-	Description  string                `yaml:"description"`
-	Author       string                `yaml:"author"`
-	License      string                `yaml:"license"`
-	Homepage     string                `yaml:"homepage"`
-	Repository   string                `yaml:"repository"`
-	Tags         []string              `yaml:"tags"`
-	MopsVersion  MopsVersionConstraint `yaml:"mops_version"`
-	BuildTargets []BuildTarget         `yaml:"build_targets"`
-	DefaultConfig map[string]any       `yaml:"default_config"`
-	CLICommands  []CLICommandInfo      `yaml:"cli_commands"`
+	Name            string                 `yaml:"name"`
+	Version         string                 `yaml:"version"`
+	Description     string                 `yaml:"description"`
+	Author          string                 `yaml:"author"`
+	License         string                 `yaml:"license"`
+	Homepage        string                 `yaml:"homepage"`
+	Repository      string                 `yaml:"repository"`
+	Tags            []string               `yaml:"tags"`
+	MopsVersion     MopsVersionConstraint  `yaml:"mops_version"`
+	BuildTargets    []BuildTarget          `yaml:"build_targets"`
+	DefaultConfig   map[string]any         `yaml:"default_config"`
+	CLICommands     []CLICommandInfo       `yaml:"cli_commands"`
+	MenuIntegration *PluginMenuIntegration `yaml:"menu_integration,omitempty"`
 }
 
 // MopsVersionConstraint represents MOPS version compatibility

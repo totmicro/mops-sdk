@@ -1,6 +1,8 @@
 package sdk
 
 import (
+	"fmt"
+	
 	"github.com/hashicorp/go-plugin"
 )
 
@@ -125,6 +127,143 @@ func (b *PluginBuilder) WithMenuEntry(menuID string, entry MenuEntry) *PluginBui
 	b.base.WithMenuEntry(menuID, entry)
 	return b
 }
+
+// WithMenuIntegration configures automatic menu integration
+func (b *PluginBuilder) WithMenuIntegration(autoRegister bool, key, label, icon string, priority int) *PluginBuilder {
+	b.info.MenuIntegration = &PluginMenuIntegration{
+		AutoRegister: autoRegister,
+		MenuID:       "main",
+		Key:          key,
+		Label:        label,
+		Icon:         icon,
+		Priority:     priority,
+		Group:        "plugins",
+	}
+	b.base.info.MenuIntegration = b.info.MenuIntegration
+	return b
+}
+
+// WithMenuIntegrationAdvanced configures automatic menu integration with all options
+func (b *PluginBuilder) WithMenuIntegrationAdvanced(integration PluginMenuIntegration) *PluginBuilder {
+	b.info.MenuIntegration = &integration
+	b.base.info.MenuIntegration = &integration
+	return b
+}
+
+// Unified naming helper methods for standardized component registration
+
+// getStandardName creates a standardized name with plugin prefix
+func (b *PluginBuilder) getStandardName(componentName string) string {
+	return fmt.Sprintf("%s-%s", b.info.Name, componentName)
+}
+
+// WithStandardProvider adds a provider with standardized naming and type
+func (b *PluginBuilder) WithStandardProvider(componentName, providerType, param, description string, providerFunc func(string) ([]MenuEntry, error)) *PluginBuilder {
+	standardName := b.getStandardName(componentName)
+	// Create a provider that includes type and param metadata
+	provider := NewStandardProvider(standardName, providerType, param, description, providerFunc)
+	b.base.providers = append(b.base.providers, provider)
+	return b
+}
+
+// WithMenuProvider adds a menu provider with standardized naming (type: "menu")
+func (b *PluginBuilder) WithMenuProvider(componentName, param, description string, providerFunc func(string) ([]MenuEntry, error)) *PluginBuilder {
+	return b.WithStandardProvider(componentName, "menu", param, description, providerFunc)
+}
+
+// WithMainMenuProvider adds the main menu provider (type: "menu", param: "main")
+func (b *PluginBuilder) WithMainMenuProvider(description string, providerFunc func(string) ([]MenuEntry, error)) *PluginBuilder {
+	return b.WithMenuProvider("menu", "main", description, providerFunc)
+}
+
+// WithDataProvider adds a data provider with standardized naming (type: "data")
+func (b *PluginBuilder) WithDataProvider(componentName, param, description string, providerFunc func(string) ([]MenuEntry, error)) *PluginBuilder {
+	return b.WithStandardProvider(componentName, "data", param, description, providerFunc)
+}
+
+// WithConfigProvider adds a config provider with standardized naming (type: "config")
+func (b *PluginBuilder) WithConfigProvider(componentName, param, description string, providerFunc func(string) ([]MenuEntry, error)) *PluginBuilder {
+	return b.WithStandardProvider(componentName, "config", param, description, providerFunc)
+}
+
+// WithStandardExecutor adds an executor with standardized naming
+func (b *PluginBuilder) WithStandardExecutor(actionName string, executorFunc func(MenuEntry, string) ActionResult) *PluginBuilder {
+	standardName := b.getStandardName(actionName)
+	executor := NewSimpleExecutor(standardName, executorFunc)
+	b.base.executors = append(b.base.executors, executor)
+	return b
+}
+
+// WithStandardInteractiveFunction adds an interactive function with standardized naming
+func (b *PluginBuilder) WithStandardInteractiveFunction(functionName string, function InteractiveGoFunction) *PluginBuilder {
+	standardName := b.getStandardName(functionName)
+	b.base.interactiveFunctions[standardName] = function
+	return b
+}
+
+// WithUnifiedProvider adds a single unified provider that handles multiple contexts
+func (b *PluginBuilder) WithUnifiedProvider(description string) *UnifiedProviderBuilder {
+	pluginName := b.info.Name
+	provider := NewUnifiedProvider(pluginName, description)
+	
+	return &UnifiedProviderBuilder{
+		pluginBuilder: b,
+		provider:      provider,
+	}
+}
+
+// UnifiedProviderBuilder provides a fluent interface for building unified providers
+type UnifiedProviderBuilder struct {
+	pluginBuilder *PluginBuilder
+	provider      *UnifiedProvider
+}
+
+// WithMainMenu adds the main menu handler (auto-registered)
+func (upb *UnifiedProviderBuilder) WithMainMenu(handler func(param string) ([]MenuEntry, error)) *UnifiedProviderBuilder {
+	upb.provider.WithMenuHandler("main", handler)
+	return upb
+}
+
+// WithMenu adds a named menu handler
+func (upb *UnifiedProviderBuilder) WithMenu(title string, handler func(param string) ([]MenuEntry, error)) *UnifiedProviderBuilder {
+	upb.provider.WithMenuHandler(title, handler)
+	return upb
+}
+
+// WithData adds a data handler
+func (upb *UnifiedProviderBuilder) WithData(title string, handler func(param string) ([]MenuEntry, error)) *UnifiedProviderBuilder {
+	upb.provider.WithDataHandler(title, handler)
+	return upb
+}
+
+// WithConfig adds a config handler
+func (upb *UnifiedProviderBuilder) WithConfig(title string, handler func(param string) ([]MenuEntry, error)) *UnifiedProviderBuilder {
+	upb.provider.WithConfigHandler(title, handler)
+	return upb
+}
+
+// Done completes the unified provider and returns to the main plugin builder
+func (upb *UnifiedProviderBuilder) Done() *PluginBuilder {
+	upb.pluginBuilder.base.providers = append(upb.pluginBuilder.base.providers, upb.provider)
+	return upb.pluginBuilder
+}
+
+// Convenience methods for common patterns
+
+// WithMainMenuAndExecutor adds both a main menu provider and corresponding executors
+func (b *PluginBuilder) WithMainMenuAndExecutor(description string, providerFunc func(string) ([]MenuEntry, error), executors map[string]func(MenuEntry, string) ActionResult) *PluginBuilder {
+	// Add main menu provider
+	b.WithMainMenuProvider(description, providerFunc)
+	
+	// Add executors with standard naming
+	for actionName, executorFunc := range executors {
+		b.WithStandardExecutor(actionName, executorFunc)
+	}
+	
+	return b
+}
+
+// Legacy support methods (deprecated but maintained for backward compatibility)
 
 // Build creates the plugin
 func (b *PluginBuilder) Build() Plugin {

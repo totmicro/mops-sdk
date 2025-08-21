@@ -21,6 +21,7 @@ type PluginInfoRPC struct {
 	DefaultConfigJSON string            `json:"default_config_json"` // JSON-encoded config to avoid GOB issues
 	Platform          PlatformInfo      `json:"platform"`
 	SupportedPlatforms []PlatformInfo   `json:"supported_platforms"`
+	MenuIntegration   *PluginMenuIntegration `json:"menu_integration,omitempty"` // Menu integration config
 }
 
 // ToPluginInfo converts PluginInfoRPC to PluginInfo
@@ -39,6 +40,7 @@ func (rpc *PluginInfoRPC) ToPluginInfo() (PluginInfo, error) {
 		CLICommands:        rpc.CLICommands,
 		Platform:           rpc.Platform,
 		SupportedPlatforms: rpc.SupportedPlatforms,
+		MenuIntegration:    rpc.MenuIntegration,
 	}
 	
 	// Decode JSON config
@@ -69,6 +71,7 @@ func NewPluginInfoRPC(info PluginInfo) (PluginInfoRPC, error) {
 		CLICommands:        info.CLICommands,
 		Platform:           info.Platform,
 		SupportedPlatforms: info.SupportedPlatforms,
+		MenuIntegration:    info.MenuIntegration,
 	}
 	
 	// Encode config as JSON

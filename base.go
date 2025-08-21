@@ -1,5 +1,10 @@
 package sdk
 
+import (
+	"fmt"
+	"strings"
+)
+
 // PluginBase provides a base implementation for mops plugins
 type PluginBase struct {
 	info                 PluginInfo
@@ -118,9 +123,19 @@ func (p *SimpleProvider) GetName() string {
 	return p.name
 }
 
-// GetEntries returns the menu entries
-func (p *SimpleProvider) GetEntries(param string) ([]MenuEntry, error) {
+// GetDescription returns the provider description  
+func (p *SimpleProvider) GetDescription() string {
+	return "Simple provider" // Default description
+}
+
+// GenerateEntries returns the menu entries
+func (p *SimpleProvider) GenerateEntries(param string) ([]MenuEntry, error) {
 	return p.fn(param)
+}
+
+// SupportsRefresh indicates if this provider supports real-time updates
+func (p *SimpleProvider) SupportsRefresh() bool {
+	return false // Default implementation
 }
 
 // SimpleExecutor provides a convenient way to create basic executors
@@ -145,6 +160,139 @@ func (e *SimpleExecutor) GetActionType() string {
 // Execute executes the action
 func (e *SimpleExecutor) Execute(entry MenuEntry, input string) ActionResult {
 	return e.fn(entry, input)
+}
+
+// StandardProvider provides a provider with standardized naming and metadata
+type StandardProvider struct {
+	name         string
+	providerType string
+	param        string
+	description  string
+	fn           func(param string) ([]MenuEntry, error)
+}
+
+// NewStandardProvider creates a new standard provider
+func NewStandardProvider(name, providerType, param, description string, fn func(param string) ([]MenuEntry, error)) *StandardProvider {
+	return &StandardProvider{
+		name:         name,
+		providerType: providerType,
+		param:        param,
+		description:  description,
+		fn:           fn,
+	}
+}
+
+// GetName returns the provider name
+func (p *StandardProvider) GetName() string {
+	return p.name
+}
+
+// GetType returns the provider type
+func (p *StandardProvider) GetType() string {
+	return p.providerType
+}
+
+// GetParam returns the provider param
+func (p *StandardProvider) GetParam() string {
+	return p.param
+}
+
+// GetDescription returns the provider description
+func (p *StandardProvider) GetDescription() string {
+	return p.description
+}
+
+// GenerateEntries returns the menu entries
+func (p *StandardProvider) GenerateEntries(param string) ([]MenuEntry, error) {
+	return p.fn(param)
+}
+
+// SupportsRefresh indicates if this provider supports real-time updates
+func (p *StandardProvider) SupportsRefresh() bool {
+	return false // Default implementation
+}
+
+// UnifiedProvider provides a single provider that handles multiple contexts based on parameters
+type UnifiedProvider struct {
+	name        string
+	description string
+	handlers    map[string]func(param string) ([]MenuEntry, error)
+}
+
+// NewUnifiedProvider creates a new unified provider
+func NewUnifiedProvider(name, description string) *UnifiedProvider {
+	return &UnifiedProvider{
+		name:        name,
+		description: description,
+		handlers:    make(map[string]func(param string) ([]MenuEntry, error)),
+	}
+}
+
+// WithMenuHandler adds a menu handler for the unified provider
+func (p *UnifiedProvider) WithMenuHandler(title string, handler func(param string) ([]MenuEntry, error)) *UnifiedProvider {
+	key := fmt.Sprintf("menu:%s", title)
+	p.handlers[key] = handler
+	return p
+}
+
+// WithDataHandler adds a data handler for the unified provider
+func (p *UnifiedProvider) WithDataHandler(title string, handler func(param string) ([]MenuEntry, error)) *UnifiedProvider {
+	key := fmt.Sprintf("data:%s", title)
+	p.handlers[key] = handler
+	return p
+}
+
+// WithConfigHandler adds a config handler for the unified provider
+func (p *UnifiedProvider) WithConfigHandler(title string, handler func(param string) ([]MenuEntry, error)) *UnifiedProvider {
+	key := fmt.Sprintf("config:%s", title)
+	p.handlers[key] = handler
+	return p
+}
+
+// GetName returns the provider name
+func (p *UnifiedProvider) GetName() string {
+	return p.name
+}
+
+// GetDescription returns the provider description
+func (p *UnifiedProvider) GetDescription() string {
+	return p.description
+}
+
+// GenerateEntries returns the menu entries based on the parameter
+func (p *UnifiedProvider) GenerateEntries(param string) ([]MenuEntry, error) {
+	// Parse the parameter to determine type and title
+	// Expected format: "type:title" or just "title" (defaults to menu)
+	var providerType, title string
+	
+	if strings.Contains(param, ":") {
+		parts := strings.SplitN(param, ":", 2)
+		providerType = parts[0]
+		title = parts[1]
+	} else {
+		providerType = "menu"
+		title = param
+	}
+	
+	key := fmt.Sprintf("%s:%s", providerType, title)
+	
+	if handler, exists := p.handlers[key]; exists {
+		return handler(param)
+	}
+	
+	// Return empty if no handler found
+	return []MenuEntry{}, nil
+}
+
+// SupportsRefresh indicates if this provider supports real-time updates
+func (p *UnifiedProvider) SupportsRefresh() bool {
+	return false // Default implementation
+}
+
+// HasMainMenu checks if this provider has a main menu handler
+func (p *UnifiedProvider) HasMainMenu() bool {
+	_, exists := p.handlers["menu:main"]
+	return exists
 }
 
 // WithSimpleProvider adds a simple provider to the plugin base

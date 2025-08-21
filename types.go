@@ -22,7 +22,9 @@ type InteractiveGoFunction func(ctx context.Context, outputChan chan<- string, i
 // DynamicProvider is an interface that provides dynamic menu entries
 type DynamicProvider interface {
 	GetName() string
-	GetEntries(param string) ([]MenuEntry, error)
+	GetDescription() string
+	GenerateEntries(param string) ([]MenuEntry, error)
+	SupportsRefresh() bool
 }
 
 // ActionExecutor is an interface that executes actions
