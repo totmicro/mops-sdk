@@ -1,9 +1,5 @@
 package sdk
 
-import (
-	"context"
-	"fmt"
-)
 
 // ActionExecutorFunc represents a simple function that can execute a UI action
 // This wraps the interface-based ActionExecutor for easier use
@@ -11,47 +7,33 @@ type ActionExecutorFunc func(ctx context.Context, params map[string]interface{})
 
 // SimpleActionExecutor wraps a function to implement the ActionExecutor interface
 type SimpleActionExecutor struct {
-	actionType string
-	handler    ActionExecutorFunc
+	handler ActionExecutorFunc
 }
 
-func (s *SimpleActionExecutor) GetActionType() string {
-	return s.actionType
+// WithBasicMenuProvider: Quickly define a main menu with minimal code
+func (b *PluginBuilder) WithBasicMenuProvider(entries []MenuEntry) *PluginBuilder {
+	return b.WithMenuProvider("main", "main", "Main menu", func(param string) ([]MenuEntry, error) {
+		return entries, nil
+	})
 }
 
-func (s *SimpleActionExecutor) Execute(entry MenuEntry, input string) ActionResult {
-	// Convert input and entry to params
-	params := make(map[string]interface{})
-	params["input"] = input
-	params["entry"] = entry
-	
-	result, err := s.handler(context.Background(), params)
-	if err != nil {
-		return ActionResult{
-			Success: false,
-			Output:  err.Error(),
-			Error:   err,
-		}
-	}
-	
-	output := ""
-	if result != nil {
-		output = fmt.Sprintf("%v", result)
-	}
-	
-	return ActionResult{
-		Success:    true,
-		Output:     output,
-		ShowOutput: true,
-	}
+// WithMenuStartupShortcut: Register a CLI command to start UI at a specific menu
+func (b *PluginBuilder) WithMenuStartupShortcut(command, menuID, description string) *PluginBuilder {
+	return b.WithCLICommand(command, description, func(args []string) error {
+		// This should trigger the UI to open at menuID (requires core support)
+		fmt.Printf("[SDK] Would start UI at menu: %s\n", menuID)
+		// TODO: Integrate with MOPS core to actually start UI at menuID
+		return nil
+	})
 }
 
-// NewSimpleActionExecutor creates an ActionExecutor from a simple function
-func NewSimpleActionExecutor(actionType string, handler ActionExecutorFunc) ActionExecutor {
-	return &SimpleActionExecutor{
-		actionType: actionType,
-		handler:    handler,
+// WithAutoConfigPresets: Auto-load config presets from plugin.yaml
+func (b *PluginBuilder) WithAutoConfigPresets() *PluginBuilder {
+	for name, preset := range b.getInfo().ConfigPresets {
+		b.WithConfigPreset(name, preset.Name, preset.Description, preset.Config)
 	}
+	return b
+}
 }
 
 // ActionMapping defines the relationship between CLI commands and UI actions
@@ -76,6 +58,11 @@ type InteractiveMapping struct {
 type ActionMappingBuilder struct {
 	builder *PluginBuilder
 }
+
+// Exported helpers and types for plugin authors
+type PluginActionSet = ActionSet
+var WithStandardActions = (*PluginBuilder).WithStandardActions
+var WithInteractiveFunction = (*PluginBuilder).WithInteractiveFunction
 
 // WithActionMappings adds multiple action mappings with a fluent interface
 func (b *PluginBuilder) WithActionMappings() *ActionMappingBuilder {
