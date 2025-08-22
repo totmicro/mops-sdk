@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/rpc"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -198,12 +199,20 @@ func (g *PluginRPCClient) callInteractiveFunctionStreaming(ctx context.Context, 
 					return
 				}
 				
-				// Small delay to avoid busy polling
+				// Adaptive delay: if we got output, poll immediately for more
+				// If no output, use a small delay to avoid busy polling
+				var delay time.Duration
+				if len(outputResp.NewOutput) > 0 {
+					delay = 1 * time.Millisecond // Very fast when there's active output
+				} else {
+					delay = 10 * time.Millisecond // Slower when idle
+				}
+				
 				select {
 				case <-ctx.Done():
 					errChan <- ctx.Err()
 					return
-				case <-time.After(10 * time.Millisecond):
+				case <-time.After(delay):
 					// Continue polling
 				}
 			}
@@ -267,12 +276,87 @@ func (g *PluginRPCClient) GetCLICommands() (map[string]CLICommandHandler, error)
 				return err
 			}
 			if execResp.Output != "" {
-				fmt.Print(execResp.Output)
+				// Output is handled by MOPS host, don't print to avoid UI interference
+				// fmt.Print(execResp.Output)
 			}
 			return execResp.Error
 		}
 	}
 	return commands, nil
+}
+
+func (g *PluginRPCClient) GetStreamingCLICommands() (map[string]StreamingCLICommandHandler, error) {
+	var resp map[string]CLICommandInfo
+	err := g.client.Call("Plugin.GetStreamingCLICommands", new(interface{}), &resp)
+	if err != nil {
+		return nil, err
+	}
+
+	commands := make(map[string]StreamingCLICommandHandler)
+	for name := range resp {
+		cmdName := name
+		commands[name] = &StreamingCommandWrapper{
+			name:   cmdName,
+			client: g.client,
+		}
+	}
+	return commands, nil
+}
+
+// StreamingCommandWrapper wraps RPC calls for streaming CLI commands
+type StreamingCommandWrapper struct {
+	name   string
+	client *rpc.Client
+}
+
+// Execute provides fallback execution for streaming commands
+func (w *StreamingCommandWrapper) Execute(ctx context.Context, args []string) error {
+	var execResp CLICommandExecuteResponse
+	execArgs := &CLICommandExecuteArgs{
+		Name: w.name,
+		Args: args,
+	}
+	err := w.client.Call("Plugin.ExecuteCLICommand", execArgs, &execResp)
+	if err != nil {
+		return err
+	}
+	if execResp.Output != "" {
+		// Output is handled by MOPS host, don't print to avoid UI interference
+		// fmt.Print(execResp.Output)
+	}
+	return execResp.Error
+}
+
+// GetHelp returns help for the streaming command
+func (w *StreamingCommandWrapper) GetHelp() string {
+	return "Streaming CLI command"
+}
+
+// ExecuteStreaming provides real-time streaming execution
+func (w *StreamingCommandWrapper) ExecuteStreaming(ctx context.Context, args []string, outputChan chan<- string) error {
+	var execResp CLICommandExecuteResponse
+	execArgs := &CLICommandExecuteArgs{
+		Name: w.name,
+		Args: args,
+	}
+	
+	// Call the streaming execution RPC method
+	err := w.client.Call("Plugin.ExecuteStreamingCLICommand", execArgs, &execResp)
+	if err != nil {
+		return err
+	}
+	
+	// For now, output the result to the channel
+	if execResp.Output != "" {
+		outputChan <- execResp.Output
+	}
+	
+	return execResp.Error
+}
+
+// SupportsStreaming indicates this command supports streaming
+func (w *StreamingCommandWrapper) SupportsStreaming() bool {
+	return true
 }
 
 func (g *PluginRPCClient) GetMenuEntries() (map[string][]MenuEntry, error) {
@@ -306,12 +390,10 @@ type PluginRPCServer struct {
 
 func (s *PluginRPCServer) GetInfo(args interface{}, resp *PluginInfoRPC) error {
 	info := s.Impl.GetInfo()
-	fmt.Printf("DEBUG RPC Server: GetInfo called, plugin has %d presets, DisplayName='%s'\n", len(info.ConfigPresets), info.DisplayName)
 	rpcInfo, err := NewPluginInfoRPC(info)
 	if err != nil {
 		return err
 	}
-	fmt.Printf("DEBUG RPC Server: After RPC conversion, presets JSON length: %d, RPC DisplayName='%s'\n", len(rpcInfo.ConfigPresetsJSON), rpcInfo.DisplayName)
 	*resp = rpcInfo
 	return nil
 }
@@ -469,6 +551,73 @@ func (s *PluginRPCServer) ExecuteCLICommand(args *CLICommandExecuteArgs, resp *C
 	return nil
 }
 
+func (s *PluginRPCServer) GetStreamingCLICommands(args interface{}, resp *map[string]CLICommandInfo) error {
+	commands, err := s.Impl.GetStreamingCLICommands()
+	if err != nil {
+		return err
+	}
+
+	result := make(map[string]CLICommandInfo)
+	info := s.Impl.GetInfo()
+
+	for name := range commands {
+		// Find command info from plugin metadata
+		for _, cmdInfo := range info.CLICommands {
+			if cmdInfo.Name == name {
+				result[name] = cmdInfo
+				break
+			}
+		}
+	}
+
+	*resp = result
+	return nil
+}
+
+func (s *PluginRPCServer) ExecuteStreamingCLICommand(args *CLICommandExecuteArgs, resp *CLICommandExecuteResponse) error {
+	commands, err := s.Impl.GetStreamingCLICommands()
+	if err != nil {
+		resp.Error = err
+		return nil
+	}
+
+	handler, exists := commands[args.Name]
+	if !exists {
+		resp.Error = fmt.Errorf("streaming command %s not found", args.Name)
+		return nil
+	}
+
+	// Create output channel for streaming
+	outputChan := make(chan string, 100)
+	var outputLines []string
+	
+	// Collect streaming output
+	done := make(chan error, 1)
+	go func() {
+		defer close(outputChan)
+		ctx := context.Background()
+		done <- handler.ExecuteStreaming(ctx, args.Args, outputChan)
+	}()
+	
+	// Collect all output lines
+	for {
+		select {
+		case line, ok := <-outputChan:
+			if !ok {
+				// Channel closed, wait for completion
+				resp.Error = <-done
+				resp.Output = strings.Join(outputLines, "")
+				return nil
+			}
+			outputLines = append(outputLines, line)
+		case execErr := <-done:
+			resp.Error = execErr
+			resp.Output = strings.Join(outputLines, "")
+			return nil
+		}
+	}
+}
+
 func (s *PluginRPCServer) GetMenuEntries(args interface{}, resp *map[string][]MenuEntry) error {
 	entries, err := s.Impl.GetMenuEntries()
 	if err != nil {
@@ -495,17 +644,18 @@ var (
 )
 
 type InteractiveStreamSession struct {
-	FunctionName string
-	Params       map[string]interface{}
-	OutputChan   chan string
-	InputChan    chan string
-	ErrorChan    chan error
-	Context      context.Context
-	Cancel       context.CancelFunc
-	OutputBuffer []string
-	Completed    bool
-	FinalError   error
-	mu           sync.RWMutex
+	FunctionName   string
+	Params         map[string]interface{}
+	OutputChan     chan string
+	InputChan      chan string
+	ErrorChan      chan error
+	Context        context.Context
+	Cancel         context.CancelFunc
+	OutputBuffer   []string
+	LastSentIndex  int  // Track what has been sent to avoid duplicates
+	Completed      bool
+	FinalError     error
+	mu             sync.RWMutex
 }
 
 func (s *PluginRPCServer) InitInteractiveStream(args *InteractiveStreamInitArgs, resp *InteractiveStreamInitResponse) error {
@@ -520,15 +670,16 @@ func (s *PluginRPCServer) InitInteractiveStream(args *InteractiveStreamInitArgs,
 	
 	ctx, cancel := context.WithCancel(context.Background())
 	session := &InteractiveStreamSession{
-		FunctionName: args.FunctionName,
-		Params:       args.Params,
-		OutputChan:   make(chan string, 1000),
-		InputChan:    make(chan string, 100),
-		ErrorChan:    make(chan error, 1),
-		Context:      ctx,
-		Cancel:       cancel,
-		OutputBuffer: make([]string, 0),
-		Completed:    false,
+		FunctionName:  args.FunctionName,
+		Params:        args.Params,
+		OutputChan:    make(chan string, 1000),
+		InputChan:     make(chan string, 100),
+		ErrorChan:     make(chan error, 1),
+		Context:       ctx,
+		Cancel:        cancel,
+		OutputBuffer:  make([]string, 0),
+		LastSentIndex: 0,
+		Completed:     false,
 	}
 	
 	sessionMutex.Lock()
@@ -620,14 +771,20 @@ func (s *PluginRPCServer) GetInteractiveStreamOutput(args *InteractiveStreamOutp
 	}
 	
 	session.mu.Lock()
-	// Get new output since last call (this is simplified - in production we'd track the last sent index)
-	newOutput := make([]string, len(session.OutputBuffer))
-	copy(newOutput, session.OutputBuffer)
-	session.OutputBuffer = session.OutputBuffer[:0] // Clear buffer after reading
+	defer session.mu.Unlock()
+	
+	// Get only new output since last call using the LastSentIndex
+	var newOutput []string
+	if session.LastSentIndex < len(session.OutputBuffer) {
+		newOutput = make([]string, len(session.OutputBuffer)-session.LastSentIndex)
+		copy(newOutput, session.OutputBuffer[session.LastSentIndex:])
+		session.LastSentIndex = len(session.OutputBuffer)
+	} else {
+		newOutput = []string{} // No new output
+	}
 	
 	completed := session.Completed
 	finalError := session.FinalError
-	session.mu.Unlock()
 	
 	resp.NewOutput = newOutput
 	resp.Completed = completed

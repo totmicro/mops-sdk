@@ -13,6 +13,7 @@ type PluginBase struct {
 	executors            []ActionExecutor
 	interactiveFunctions map[string]InteractiveGoFunction
 	cliCommands          map[string]CLICommandHandler
+	streamingCLICommands map[string]StreamingCLICommandHandler
 	menuEntries          map[string][]MenuEntry
 }
 
@@ -24,16 +25,13 @@ func NewPluginBase(info PluginInfo) *PluginBase {
 		executors:            []ActionExecutor{},
 		interactiveFunctions: make(map[string]InteractiveGoFunction),
 		cliCommands:          make(map[string]CLICommandHandler),
+		streamingCLICommands: make(map[string]StreamingCLICommandHandler),
 		menuEntries:          make(map[string][]MenuEntry),
 	}
 }
 
 // GetInfo returns metadata about the plugin
 func (p *PluginBase) GetInfo() PluginInfo {
-	fmt.Printf("DEBUG SDK GetInfo: Plugin '%s' has %d presets\n", p.info.Name, len(p.info.ConfigPresets))
-	for name, preset := range p.info.ConfigPresets {
-		fmt.Printf("DEBUG SDK GetInfo: Preset '%s': %s\n", name, preset.Name)
-	}
 	return p.info
 }
 
@@ -98,6 +96,16 @@ func (p *PluginBase) AddInteractiveFunction(name string, fn InteractiveGoFunctio
 // AddCLICommand adds a CLI command to the plugin
 func (p *PluginBase) AddCLICommand(name string, handler CLICommandHandler) {
 	p.cliCommands[name] = handler
+}
+
+// AddStreamingCLICommand adds a streaming CLI command to the plugin
+func (p *PluginBase) AddStreamingCLICommand(name string, handler StreamingCLICommandHandler) {
+	p.streamingCLICommands[name] = handler
+}
+
+// GetStreamingCLICommands returns all streaming CLI commands
+func (p *PluginBase) GetStreamingCLICommands() (map[string]StreamingCLICommandHandler, error) {
+	return p.streamingCLICommands, nil
 }
 
 // AddMenuEntry adds a menu entry to a specific menu
@@ -320,6 +328,12 @@ func (p *PluginBase) WithInteractiveFunction(name string, fn InteractiveGoFuncti
 // WithCLICommand adds a CLI command to the plugin base
 func (p *PluginBase) WithCLICommand(name string, handler CLICommandHandler) *PluginBase {
 	p.AddCLICommand(name, handler)
+	return p
+}
+
+// WithStreamingCLICommand adds a streaming CLI command to the plugin base
+func (p *PluginBase) WithStreamingCLICommand(name string, handler StreamingCLICommandHandler) *PluginBase {
+	p.AddStreamingCLICommand(name, handler)
 	return p
 }
 

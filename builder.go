@@ -124,6 +124,31 @@ func (b *PluginBuilder) WithCLICommand(name, description string, handler CLIComm
 	return b
 }
 
+// WithCLICommandAndUIMapping adds a CLI command with UI action mapping
+func (b *PluginBuilder) WithCLICommandAndUIMapping(name, description string, handler CLICommandHandler, uiAction, uiTarget, uiCommand string) *PluginBuilder {
+	cmdInfo := CLICommandInfo{
+		Name:        name,
+		Description: description,
+		UIAction:    uiAction,
+		UITarget:    uiTarget,
+		UICommand:   uiCommand,
+	}
+	b.getInfo().CLICommands = append(b.getInfo().CLICommands, cmdInfo)
+	b.base.WithCLICommand(name, handler)
+	return b
+}
+
+// WithStreamingCLICommand adds a streaming CLI command that supports real-time output
+func (b *PluginBuilder) WithStreamingCLICommand(name, description string, handler StreamingCLICommandHandler) *PluginBuilder {
+	cmdInfo := CLICommandInfo{
+		Name:        name,
+		Description: description + " (streaming)",
+	}
+	b.getInfo().CLICommands = append(b.getInfo().CLICommands, cmdInfo)
+	b.base.WithStreamingCLICommand(name, handler)
+	return b
+}
+
 // WithMenuEntry adds a menu entry
 func (b *PluginBuilder) WithMenuEntry(menuID string, entry MenuEntry) *PluginBuilder {
 	b.base.WithMenuEntry(menuID, entry)

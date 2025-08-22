@@ -1,6 +1,7 @@
 package sdk
 
 import (
+	"context"
 	"time"
 )
 
@@ -44,10 +45,32 @@ type CLICommandInfo struct {
 	Description string   `json:"description"`
 	Usage       string   `json:"usage"`
 	Examples    []string `json:"examples"`
+	
+	// UI Action mapping - allows CLI commands to specify their UI equivalent
+	UIAction    string `json:"ui_action,omitempty"`    // The UI action type (e.g., "goto", "interactive_go", "action")
+	UITarget    string `json:"ui_target,omitempty"`    // For goto actions - the target menu/provider
+	UICommand   string `json:"ui_command,omitempty"`   // For interactive_go actions - the command to execute
 }
 
 // CLICommandHandler handles CLI command execution
 type CLICommandHandler func(args []string) error
+
+// StreamingCLICommandHandler extends CLICommandHandler to support real-time output streaming
+type StreamingCLICommandHandler interface {
+	// Execute runs the CLI command with given arguments (fallback method)
+	Execute(ctx context.Context, args []string) error
+
+	// GetHelp returns help information for the command
+	GetHelp() string
+	
+	// ExecuteStreaming runs the CLI command with real-time output streaming
+	// outputChan receives output lines as they are generated
+	// The channel is closed when the command completes
+	ExecuteStreaming(ctx context.Context, args []string, outputChan chan<- string) error
+	
+	// SupportsStreaming indicates if this command supports real-time streaming
+	SupportsStreaming() bool
+}
 
 // Plugin is the interface that all plugins must implement
 type Plugin interface {
@@ -57,6 +80,7 @@ type Plugin interface {
 	RegisterExecutors() []ActionExecutor
 	RegisterInteractiveFunctions() map[string]InteractiveGoFunction
 	GetCLICommands() (map[string]CLICommandHandler, error)
+	GetStreamingCLICommands() (map[string]StreamingCLICommandHandler, error)
 	GetMenuEntries() (map[string][]MenuEntry, error)
 	Cleanup() error
 	ValidateConfig(config map[string]any) error
