@@ -149,6 +149,31 @@ func (b *PluginBuilder) WithCLICommandAndUIMapping(name, description string, han
 	return b
 }
 
+// WithSmartCLICommand adds a CLI command that automatically handles both direct execution and interactive selection
+func (b *PluginBuilder) WithSmartCLICommand(config SmartCLICommandConfig) *PluginBuilder {
+	// Register the CLI command
+	cmdInfo := CLICommandInfo{
+		Name:        config.Command,
+		Description: config.Description,
+		UIAction:    "core_interactive-go",
+		UITarget:    config.UITarget,
+		UICommand:   config.SmartFunctionName,
+	}
+	b.getInfo().CLICommands = append(b.getInfo().CLICommands, cmdInfo)
+	b.base.WithCLICommand(config.Command, config.DirectHandler)
+	
+	// Register the smart selector function
+	smartSelector := CreateSmartSelector(SmartSelectorConfig{
+		DirectExecutor:      config.DirectExecutor,
+		InteractiveSelector: config.InteractiveSelector,
+		CommandName:         config.Command,
+		Usage:               config.Usage,
+	})
+	b.base.WithInteractiveFunction(config.SmartFunctionName, smartSelector)
+	
+	return b
+}
+
 // WithStreamingCLICommand adds a streaming CLI command that supports real-time output
 func (b *PluginBuilder) WithStreamingCLICommand(name, description string, handler StreamingCLICommandHandler) *PluginBuilder {
 	cmdInfo := CLICommandInfo{
