@@ -51,6 +51,7 @@ type CLICommandInfo struct {
 	UIAction    string `json:"ui_action,omitempty"`    // The UI action type (e.g., "goto", "core_interactive-go", "action")
 	UITarget    string `json:"ui_target,omitempty"`    // For goto actions - the target menu/provider
 	UICommand   string `json:"ui_command,omitempty"`   // For core_interactive-go actions - the command to execute
+	UITitle     string `json:"ui_title,omitempty"`     // Custom title for Bubble Tea UI when executed via CLI
 }
 
 // CLICommandHandler handles CLI command execution

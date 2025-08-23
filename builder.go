@@ -158,6 +158,7 @@ func (b *PluginBuilder) WithSmartCLICommand(config SmartCLICommandConfig) *Plugi
 		UIAction:    "core_interactive-go",
 		UITarget:    config.UITarget,
 		UICommand:   config.SmartFunctionName,
+		UITitle:     config.UITitle,
 	}
 	b.getInfo().CLICommands = append(b.getInfo().CLICommands, cmdInfo)
 	b.base.WithCLICommand(config.Command, config.DirectHandler)

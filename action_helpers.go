@@ -369,12 +369,20 @@ func (b *PluginBuilder) WithSelectionMenuProvider(menuID, title string, items []
 		
 		// Add selection entries directly without useless header
 		for i, item := range items {
+			// Use custom title if provided, otherwise default format
+			var message string
+			if item.Title != "" {
+				message = item.Title
+			} else {
+				message = fmt.Sprintf("🚀 %s Login", item.Description)
+			}
+			
 			entries = append(entries, MenuEntry{
 				Key:     fmt.Sprintf("%d", i+1),
 				Label:   fmt.Sprintf("%s %s - %s", item.Icon, item.Name, item.Description),
 				Action:  "core_interactive-go",
 				Command: fmt.Sprintf("%s_execute", menuID),
-				Message: fmt.Sprintf("Execute %s", item.Name),
+				Message: message,
 				Params: item.Params,
 			})
 		}
@@ -388,6 +396,7 @@ type SelectionItem struct {
 	Name        string                 // Item name/identifier
 	Description string                 // Item description
 	Icon        string                 // Item icon/emoji
+	Title       string                 // Custom title for Bubble Tea UI (optional)
 	Params      map[string]interface{} // Parameters to pass to the execute function
 }
 
@@ -410,8 +419,9 @@ func (b *PluginBuilder) WithArgumentBasedAction(config ArgumentBasedActionConfig
 		Command:             config.CommandName,
 		Description:         config.Description,
 		Usage:               fmt.Sprintf("%s [args...]", config.CommandName),
-		SmartFunctionName:   fmt.Sprintf("%s_smart", config.CommandName),
+		SmartFunctionName:   fmt.Sprintf("%s_smart_%s", config.CommandName, strings.ReplaceAll(strings.ToLower(cliTitle), " ", "_")),
 		UITarget:            fullMenuID, // Use the full prefixed menu ID
+		UITitle:             cliTitle,   // Pass CLI title for Bubble Tea display
 		DirectHandler:       nil, // We'll use DirectExecutor instead
 		DirectExecutor:      convertToDirectExecutor(config.DirectFunction, cliTitle),
 	}

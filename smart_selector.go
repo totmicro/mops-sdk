@@ -98,6 +98,9 @@ type SmartCLICommandConfig struct {
 	// UI target menu to navigate to when no CLI arguments are provided (optional)
 	UITarget string
 	
+	// UI title for Bubble Tea display when executed via CLI with arguments
+	UITitle string
+	
 	// Direct CLI handler - called when the command is executed directly from CLI
 	DirectHandler func(args []string) error
 	
