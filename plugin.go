@@ -45,11 +45,12 @@ type CLICommandInfo struct {
 	Description string   `json:"description"`
 	Usage       string   `json:"usage"`
 	Examples    []string `json:"examples"`
+	Hidden      bool     `json:"hidden,omitempty"`      // Hide this command from CLI help and prevent execution with args
 	
 	// UI Action mapping - allows CLI commands to specify their UI equivalent
-	UIAction    string `json:"ui_action,omitempty"`    // The UI action type (e.g., "goto", "interactive_go", "action")
+	UIAction    string `json:"ui_action,omitempty"`    // The UI action type (e.g., "goto", "core_interactive-go", "action")
 	UITarget    string `json:"ui_target,omitempty"`    // For goto actions - the target menu/provider
-	UICommand   string `json:"ui_command,omitempty"`   // For interactive_go actions - the command to execute
+	UICommand   string `json:"ui_command,omitempty"`   // For core_interactive-go actions - the command to execute
 }
 
 // CLICommandHandler handles CLI command execution
@@ -77,7 +78,6 @@ type Plugin interface {
 	GetInfo() PluginInfo
 	Initialize(config map[string]any) error
 	RegisterProviders() []DynamicProvider
-	RegisterExecutors() []ActionExecutor
 	RegisterInteractiveFunctions() map[string]InteractiveGoFunction
 	GetCLICommands() (map[string]CLICommandHandler, error)
 	GetStreamingCLICommands() (map[string]StreamingCLICommandHandler, error)
@@ -86,14 +86,11 @@ type Plugin interface {
 	ValidateConfig(config map[string]any) error
 }
 
-// Registry interface for managing providers and executors
+// Registry interface for managing providers
 type Registry interface {
 	RegisterProvider(provider DynamicProvider)
-	RegisterExecutor(executor ActionExecutor)
 	GetProvider(name string) (DynamicProvider, bool)
-	GetExecutor(actionType string) (ActionExecutor, bool)
 	ListProviders() []string
-	ListExecutors() []string
 }
 
 // PluginMenuIntegration defines how a plugin integrates with MOPS menus

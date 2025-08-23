@@ -90,23 +90,6 @@ func (g *PluginRPCClient) RegisterProviders() []DynamicProvider {
 	return providers
 }
 
-func (g *PluginRPCClient) RegisterExecutors() []ActionExecutor {
-	var resp []ActionExecutorRPC
-	err := g.client.Call("Plugin.RegisterExecutors", new(interface{}), &resp)
-	if err != nil {
-		return nil
-	}
-
-	executors := make([]ActionExecutor, len(resp))
-	for i, e := range resp {
-		executors[i] = &ActionExecutorRPCClient{
-			client:     g.client,
-			actionType: e.ActionType,
-		}
-	}
-	return executors
-}
-
 func (g *PluginRPCClient) RegisterInteractiveFunctions() map[string]InteractiveGoFunction {
 	var resp map[string]string
 	err := g.client.Call("Plugin.RegisterInteractiveFunctions", new(interface{}), &resp)
@@ -416,18 +399,6 @@ func (s *PluginRPCServer) RegisterProviders(args interface{}, resp *[]DynamicPro
 		result[i] = DynamicProviderRPC{
 			Name:        p.GetName(),
 			Description: p.GetDescription(),
-		}
-	}
-	*resp = result
-	return nil
-}
-
-func (s *PluginRPCServer) RegisterExecutors(args interface{}, resp *[]ActionExecutorRPC) error {
-	executors := s.Impl.RegisterExecutors()
-	result := make([]ActionExecutorRPC, len(executors))
-	for i, e := range executors {
-		result[i] = ActionExecutorRPC{
-			ActionType: e.GetActionType(),
 		}
 	}
 	*resp = result
@@ -825,23 +796,6 @@ func (s *PluginRPCServer) GenerateProviderEntries(args *ProviderGenerateEntriesA
 	return fmt.Errorf("provider %s not found", args.Name)
 }
 
-func (s *PluginRPCServer) ExecuteAction(args *ExecutorExecuteArgs, resp *ActionResult) error {
-	executors := s.Impl.RegisterExecutors()
-
-	for _, executor := range executors {
-		if executor.GetActionType() == args.ActionType {
-			*resp = executor.Execute(args.Entry, args.Input)
-			return nil
-		}
-	}
-
-	*resp = ActionResult{
-		Success: false,
-		Error:   fmt.Errorf("executor not found for action type: %s", args.ActionType),
-	}
-	return nil
-}
-
 // RPC client implementations
 type DynamicProviderRPCClient struct {
 	client      *rpc.Client
@@ -871,40 +825,10 @@ func (d *DynamicProviderRPCClient) SupportsRefresh() bool {
 	return false // Default implementation for RPC clients
 }
 
-type ActionExecutorRPCClient struct {
-	client     *rpc.Client
-	actionType string
-}
-
-func (a *ActionExecutorRPCClient) GetActionType() string {
-	return a.actionType
-}
-
-func (a *ActionExecutorRPCClient) Execute(entry MenuEntry, input string) ActionResult {
-	args := &ExecutorExecuteArgs{
-		ActionType: a.actionType,
-		Entry:      entry,
-		Input:      input,
-	}
-	var resp ActionResult
-	err := a.client.Call("Plugin.ExecuteAction", args, &resp)
-	if err != nil {
-		return ActionResult{
-			Success: false,
-			Error:   err,
-		}
-	}
-	return resp
-}
-
 // RPC argument types
 type DynamicProviderRPC struct {
 	Name        string
 	Description string
-}
-
-type ActionExecutorRPC struct {
-	ActionType string
 }
 
 type InteractiveFunctionCallArgs struct {

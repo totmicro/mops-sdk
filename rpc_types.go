@@ -3,27 +3,28 @@ package sdk
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 )
 
 // PluginInfoRPC is a GOB-safe version of PluginInfo for RPC transport
 type PluginInfoRPC struct {
-	Name              string            `json:"name"`
-	Version           string            `json:"version"`
-	Description       string            `json:"description"`
-	DisplayName       string            `json:"display_name,omitempty"` // Optional display name for UI
-	Author            string            `json:"author"`
-	License           string            `json:"license"`
-	Homepage          string            `json:"homepage"`
-	MopsMinVersion    string            `json:"mops_min_version"`
-	MopsMaxVersion    string            `json:"mops_max_version"`
-	Dependencies      []string          `json:"dependencies"`
-	Tags              []string          `json:"tags"`
-	CLICommands       []CLICommandInfo  `json:"cli_commands"`
-	DefaultConfigJSON string            `json:"default_config_json"` // JSON-encoded config to avoid GOB issues
-	ConfigPresetsJSON string            `json:"config_presets_json"` // JSON-encoded presets to avoid GOB issues
-	Platform          PlatformInfo      `json:"platform"`
-	SupportedPlatforms []PlatformInfo   `json:"supported_platforms"`
-	MenuIntegration   *PluginMenuIntegration `json:"menu_integration,omitempty"` // Menu integration config
+	Name               string                 `json:"name"`
+	Version            string                 `json:"version"`
+	Description        string                 `json:"description"`
+	DisplayName        string                 `json:"display_name,omitempty"` // Optional display name for UI
+	Author             string                 `json:"author"`
+	License            string                 `json:"license"`
+	Homepage           string                 `json:"homepage"`
+	MopsMinVersion     string                 `json:"mops_min_version"`
+	MopsMaxVersion     string                 `json:"mops_max_version"`
+	Dependencies       []string               `json:"dependencies"`
+	Tags               []string               `json:"tags"`
+	CLICommands        []CLICommandInfo       `json:"cli_commands"`
+	DefaultConfigJSON  string                 `json:"default_config_json"` // JSON-encoded config to avoid GOB issues
+	ConfigPresetsJSON  string                 `json:"config_presets_json"` // JSON-encoded presets to avoid GOB issues
+	Platform           PlatformInfo           `json:"platform"`
+	SupportedPlatforms []PlatformInfo         `json:"supported_platforms"`
+	MenuIntegration    *PluginMenuIntegration `json:"menu_integration,omitempty"` // Menu integration config
 }
 
 // ToPluginInfo converts PluginInfoRPC to PluginInfo
@@ -46,6 +47,20 @@ func (rpc *PluginInfoRPC) ToPluginInfo() (PluginInfo, error) {
 		MenuIntegration:    rpc.MenuIntegration,
 	}
 	
+	// Debug log CLI commands being converted from RPC
+	debugMsg := fmt.Sprintf("[SDK-RPC-BACK] Converting %d CLI commands from RPC:\n", len(rpc.CLICommands))
+	for _, cmd := range rpc.CLICommands {
+		debugMsg += fmt.Sprintf("  - %s: Hidden=%v\n", cmd.Name, cmd.Hidden)
+	}
+	debugMsg += "\n"
+	
+	// Append to existing log file
+	file, _ := os.OpenFile("/tmp/mops-debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if file != nil {
+		file.WriteString(debugMsg)
+		file.Close()
+	}
+
 	// Decode JSON config
 	if rpc.DefaultConfigJSON != "" {
 		if err := json.Unmarshal([]byte(rpc.DefaultConfigJSON), &info.DefaultConfig); err != nil {
@@ -54,7 +69,7 @@ func (rpc *PluginInfoRPC) ToPluginInfo() (PluginInfo, error) {
 	} else {
 		info.DefaultConfig = make(map[string]any)
 	}
-	
+
 	// Decode JSON presets
 	if rpc.ConfigPresetsJSON != "" {
 		if err := json.Unmarshal([]byte(rpc.ConfigPresetsJSON), &info.ConfigPresets); err != nil {
@@ -63,7 +78,7 @@ func (rpc *PluginInfoRPC) ToPluginInfo() (PluginInfo, error) {
 	} else {
 		info.ConfigPresets = make(map[string]ConfigPreset)
 	}
-	
+
 	return info, nil
 }
 
@@ -87,6 +102,20 @@ func NewPluginInfoRPC(info PluginInfo) (PluginInfoRPC, error) {
 		MenuIntegration:    info.MenuIntegration,
 	}
 	
+	// Debug log CLI commands being converted for RPC
+	debugMsg := fmt.Sprintf("[SDK-RPC] Converting %d CLI commands for RPC:\n", len(info.CLICommands))
+	for _, cmd := range info.CLICommands {
+		debugMsg += fmt.Sprintf("  - %s: Hidden=%v\n", cmd.Name, cmd.Hidden)
+	}
+	debugMsg += "\n"
+	
+	// Append to existing log file
+	file, _ := os.OpenFile("/tmp/mops-debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if file != nil {
+		file.WriteString(debugMsg)
+		file.Close()
+	}
+
 	// Encode config as JSON
 	if info.DefaultConfig != nil {
 		configJSON, err := json.Marshal(info.DefaultConfig)
@@ -95,7 +124,7 @@ func NewPluginInfoRPC(info PluginInfo) (PluginInfoRPC, error) {
 		}
 		rpc.DefaultConfigJSON = string(configJSON)
 	}
-	
+
 	// Encode presets as JSON
 	if info.ConfigPresets != nil {
 		presetsJSON, err := json.Marshal(info.ConfigPresets)
@@ -104,6 +133,6 @@ func NewPluginInfoRPC(info PluginInfo) (PluginInfoRPC, error) {
 		}
 		rpc.ConfigPresetsJSON = string(presetsJSON)
 	}
-	
+
 	return rpc, nil
 }

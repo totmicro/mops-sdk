@@ -2,6 +2,7 @@ package sdk
 
 import (
 	"fmt"
+	"os"
 	
 	"github.com/hashicorp/go-plugin"
 )
@@ -101,12 +102,6 @@ func (b *PluginBuilder) WithSimpleProvider(name, description string, fn func(par
 	return b
 }
 
-// WithSimpleExecutor adds a simple executor
-func (b *PluginBuilder) WithSimpleExecutor(actionType string, fn func(entry MenuEntry, input string) ActionResult) *PluginBuilder {
-	b.base.WithSimpleExecutor(actionType, fn)
-	return b
-}
-
 // WithInteractiveFunction adds an interactive function
 func (b *PluginBuilder) WithInteractiveFunction(name string, fn InteractiveGoFunction) *PluginBuilder {
 	b.base.WithInteractiveFunction(name, fn)
@@ -115,10 +110,26 @@ func (b *PluginBuilder) WithInteractiveFunction(name string, fn InteractiveGoFun
 
 // WithCLICommand adds a CLI command
 func (b *PluginBuilder) WithCLICommand(name, description string, handler CLICommandHandler) *PluginBuilder {
+	return b.WithCLICommandOptions(name, description, handler, false)
+}
+
+// WithHiddenCLICommand adds a hidden CLI command (won't appear in help and prevents execution with args)
+func (b *PluginBuilder) WithHiddenCLICommand(name, description string, handler CLICommandHandler) *PluginBuilder {
+	return b.WithCLICommandOptions(name, description, handler, true)
+}
+
+// WithCLICommandOptions adds a CLI command with visibility options
+func (b *PluginBuilder) WithCLICommandOptions(name, description string, handler CLICommandHandler, hidden bool) *PluginBuilder {
 	cmdInfo := CLICommandInfo{
 		Name:        name,
 		Description: description,
+		Hidden:      hidden,
 	}
+	
+	// Debug log to file
+	debugMsg := fmt.Sprintf("[SDK-BUILDER] Command: %s, Hidden: %v, Struct: %+v\n", name, hidden, cmdInfo)
+	os.WriteFile("/tmp/mops-debug.log", []byte(debugMsg), 0644)
+	
 	b.getInfo().CLICommands = append(b.getInfo().CLICommands, cmdInfo)
 	b.base.WithCLICommand(name, handler)
 	return b
@@ -222,14 +233,6 @@ func (b *PluginBuilder) WithConfigProvider(componentName, param, description str
 	return b.WithStandardProvider(componentName, "config", param, description, providerFunc)
 }
 
-// WithStandardExecutor adds an executor with standardized naming
-func (b *PluginBuilder) WithStandardExecutor(actionName string, executorFunc func(MenuEntry, string) ActionResult) *PluginBuilder {
-	standardName := b.getStandardName(actionName)
-	executor := NewSimpleExecutor(standardName, executorFunc)
-	b.base.executors = append(b.base.executors, executor)
-	return b
-}
-
 // WithStandardInteractiveFunction adds an interactive function with standardized naming
 func (b *PluginBuilder) WithStandardInteractiveFunction(functionName string, function InteractiveGoFunction) *PluginBuilder {
 	standardName := b.getStandardName(functionName)
@@ -285,19 +288,6 @@ func (upb *UnifiedProviderBuilder) Done() *PluginBuilder {
 }
 
 // Convenience methods for common patterns
-
-// WithMainMenuAndExecutor adds both a main menu provider and corresponding executors
-func (b *PluginBuilder) WithMainMenuAndExecutor(description string, providerFunc func(string) ([]MenuEntry, error), executors map[string]func(MenuEntry, string) ActionResult) *PluginBuilder {
-	// Add main menu provider
-	b.WithMainMenuProvider(description, providerFunc)
-	
-	// Add executors with standard naming
-	for actionName, executorFunc := range executors {
-		b.WithStandardExecutor(actionName, executorFunc)
-	}
-	
-	return b
-}
 
 // Build creates the plugin
 func (b *PluginBuilder) Build() Plugin {

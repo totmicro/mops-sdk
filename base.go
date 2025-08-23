@@ -10,7 +10,6 @@ type PluginBase struct {
 	info                 PluginInfo
 	config               map[string]any
 	providers            []DynamicProvider
-	executors            []ActionExecutor
 	interactiveFunctions map[string]InteractiveGoFunction
 	cliCommands          map[string]CLICommandHandler
 	streamingCLICommands map[string]StreamingCLICommandHandler
@@ -22,7 +21,6 @@ func NewPluginBase(info PluginInfo) *PluginBase {
 	return &PluginBase{
 		info:                 info,
 		providers:            []DynamicProvider{},
-		executors:            []ActionExecutor{},
 		interactiveFunctions: make(map[string]InteractiveGoFunction),
 		cliCommands:          make(map[string]CLICommandHandler),
 		streamingCLICommands: make(map[string]StreamingCLICommandHandler),
@@ -44,11 +42,6 @@ func (p *PluginBase) Initialize(config map[string]any) error {
 // RegisterProviders registers dynamic providers with mops
 func (p *PluginBase) RegisterProviders() []DynamicProvider {
 	return p.providers
-}
-
-// RegisterExecutors registers action executors with mops
-func (p *PluginBase) RegisterExecutors() []ActionExecutor {
-	return p.executors
 }
 
 // RegisterInteractiveFunctions registers interactive functions with mops
@@ -81,11 +74,6 @@ func (p *PluginBase) ValidateConfig(config map[string]any) error {
 // AddProvider adds a dynamic provider to the plugin
 func (p *PluginBase) AddProvider(provider DynamicProvider) {
 	p.providers = append(p.providers, provider)
-}
-
-// AddExecutor adds an action executor to the plugin
-func (p *PluginBase) AddExecutor(executor ActionExecutor) {
-	p.executors = append(p.executors, executor)
 }
 
 // AddInteractiveFunction adds an interactive function to the plugin
@@ -149,31 +137,6 @@ func (p *SimpleProvider) GenerateEntries(param string) ([]MenuEntry, error) {
 func (p *SimpleProvider) SupportsRefresh() bool {
 	return false // Default implementation
 }
-
-// SimpleExecutor provides a convenient way to create basic executors
-type SimpleExecutor struct {
-	actionType string
-	fn         func(entry MenuEntry, input string) ActionResult
-}
-
-// NewSimpleExecutor creates a new simple executor
-func NewSimpleExecutor(actionType string, fn func(entry MenuEntry, input string) ActionResult) *SimpleExecutor {
-	return &SimpleExecutor{
-		actionType: actionType,
-		fn:         fn,
-	}
-}
-
-// GetActionType returns the action type
-func (e *SimpleExecutor) GetActionType() string {
-	return e.actionType
-}
-
-// Execute executes the action
-func (e *SimpleExecutor) Execute(entry MenuEntry, input string) ActionResult {
-	return e.fn(entry, input)
-}
-
 // StandardProvider provides a provider with standardized naming and metadata
 type StandardProvider struct {
 	name         string
@@ -310,12 +273,6 @@ func (p *UnifiedProvider) HasMainMenu() bool {
 // WithSimpleProvider adds a simple provider to the plugin base
 func (p *PluginBase) WithSimpleProvider(name string, fn func(param string) ([]MenuEntry, error)) *PluginBase {
 	p.AddProvider(NewSimpleProvider(name, fn))
-	return p
-}
-
-// WithSimpleExecutor adds a simple executor to the plugin base
-func (p *PluginBase) WithSimpleExecutor(actionType string, fn func(entry MenuEntry, input string) ActionResult) *PluginBase {
-	p.AddExecutor(NewSimpleExecutor(actionType, fn))
 	return p
 }
 

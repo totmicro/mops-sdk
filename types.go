@@ -27,12 +27,6 @@ type DynamicProvider interface {
 	SupportsRefresh() bool
 }
 
-// ActionExecutor is an interface that executes actions
-type ActionExecutor interface {
-	GetActionType() string
-	Execute(entry MenuEntry, input string) ActionResult
-}
-
 // AppState represents the application state
 type AppState int
 

@@ -4,7 +4,10 @@ go 1.24
 
 toolchain go1.24.5
 
-require github.com/hashicorp/go-plugin v1.7.0
+require (
+	github.com/hashicorp/go-plugin v1.7.0
+	gopkg.in/yaml.v2 v2.4.0
+)
 
 require (
 	github.com/fatih/color v1.13.0 // indirect
