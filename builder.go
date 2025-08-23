@@ -229,6 +229,11 @@ func (b *PluginBuilder) getStandardName(componentName string) string {
 	return fmt.Sprintf("%s-%s", b.getInfo().Name, componentName)
 }
 
+// GetFullMenuID returns the full prefixed menu ID for goto targets
+func (b *PluginBuilder) GetFullMenuID(menuID string) string {
+	return b.getStandardName(menuID)
+}
+
 // WithStandardProvider adds a provider with standardized naming and type
 func (b *PluginBuilder) WithStandardProvider(componentName, providerType, param, description string, providerFunc func(string) ([]MenuEntry, error)) *PluginBuilder {
 	standardName := b.getStandardName(componentName)

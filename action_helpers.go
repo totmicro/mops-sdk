@@ -1,9 +1,11 @@
 package sdk
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"path/filepath"
+	"strings"
 	"gopkg.in/yaml.v2"
 )
 
@@ -257,6 +259,7 @@ type InteractiveMapping struct {
 	Function       InteractiveGoFunction        // The interactive function implementation (nil to use built-in)
 	Params         map[string]interface{}       // Parameters to pass to the interactive function
 	Hidden         bool                         // Hide this command from CLI help and prevent CLI execution
+	MenuTarget     string                       // Target menu for navigation when no CLI args provided
 }
 
 // ActionMappingBuilder provides a fluent interface for creating action mappings
@@ -338,10 +341,116 @@ func ShellAction(name, description, command string) InteractiveMapping {
 		CLIDescription: description,
 		UICommand:      "shell_command", // Use the built-in shell command function
 		Function:       nil,             // We don't need a custom function, use the built-in one
-		Params: map[string]interface{}{
-			"command": command, // Pass the shell command as a parameter
-		},
 		Hidden:         false,
+		Params: map[string]interface{}{
+			"command": command,
+		},
+	}
+}
+
+// SelectionAction creates a CLI command that shows a selection menu when no args provided,
+// or executes directly when args are provided. Generic pattern for any CLI command with arguments.
+func SelectionAction(name, description, menuTarget string, directFunction InteractiveGoFunction) InteractiveMapping {
+	return InteractiveMapping{
+		CLIName:        name,
+		CLIDescription: description,
+		UICommand:      fmt.Sprintf("%s_direct", name), // Function name for direct execution
+		Function:       directFunction,
+		Hidden:         false,
+		MenuTarget:     menuTarget, // Target menu for selection when no args provided
+	}
+}
+
+// MenuProviderAction creates a standardized menu provider with auto-numbered entries
+// that work with CLI arguments and UI interaction
+func (b *PluginBuilder) WithSelectionMenuProvider(menuID, title string, items []SelectionItem, executeFunction InteractiveGoFunction) *PluginBuilder {
+	return b.WithMenuProvider(menuID, menuID, title, func(param string) ([]MenuEntry, error) {
+		var entries []MenuEntry
+		
+		// Add selection entries directly without useless header
+		for i, item := range items {
+			entries = append(entries, MenuEntry{
+				Key:     fmt.Sprintf("%d", i+1),
+				Label:   fmt.Sprintf("%s %s - %s", item.Icon, item.Name, item.Description),
+				Action:  "core_interactive-go",
+				Command: fmt.Sprintf("%s_execute", menuID),
+				Message: fmt.Sprintf("Execute %s", item.Name),
+				Params: item.Params,
+			})
+		}
+		
+		return entries, nil
+	}).WithInteractiveFunction(fmt.Sprintf("%s_execute", menuID), executeFunction)
+}
+
+// SelectionItem represents a selectable item in a menu
+type SelectionItem struct {
+	Name        string                 // Item name/identifier
+	Description string                 // Item description
+	Icon        string                 // Item icon/emoji
+	Params      map[string]interface{} // Parameters to pass to the execute function
+}
+
+// WithArgumentBasedAction creates a complete CLI-with-args pattern:
+// - CLI command with arguments executes directly 
+// - CLI command without arguments navigates to selection menu
+// - UI menu provides interactive selection
+func (b *PluginBuilder) WithArgumentBasedAction(config ArgumentBasedActionConfig) *PluginBuilder {
+	// Create the full menu ID with plugin prefix
+	fullMenuID := b.getStandardName(config.MenuID)
+	
+	// Determine the CLI title to use
+	cliTitle := config.CLITitle
+	if cliTitle == "" {
+		cliTitle = config.MenuTitle // Fall back to menu title if no CLI title specified
+	}
+	
+	// Create the smart CLI command
+	smartConfig := SmartCLICommandConfig{
+		Command:             config.CommandName,
+		Description:         config.Description,
+		Usage:               fmt.Sprintf("%s [args...]", config.CommandName),
+		SmartFunctionName:   fmt.Sprintf("%s_smart", config.CommandName),
+		UITarget:            fullMenuID, // Use the full prefixed menu ID
+		DirectHandler:       nil, // We'll use DirectExecutor instead
+		DirectExecutor:      convertToDirectExecutor(config.DirectFunction, cliTitle),
+	}
+	
+	// Add the smart CLI command
+	b = b.WithSmartCLICommand(smartConfig)
+	
+	// Add the selection menu provider
+	return b.WithSelectionMenuProvider(config.MenuID, config.MenuTitle, config.Items, config.ExecuteFunction)
+}
+
+// ArgumentBasedActionConfig configures a complete CLI-with-args action pattern
+type ArgumentBasedActionConfig struct {
+	CommandName     string                    // CLI command name
+	Description     string                    // CLI command description
+	MenuID          string                    // Menu ID for selection
+	MenuTitle       string                    // Menu title for interactive selection
+	CLITitle        string                    // Title for CLI execution (optional, defaults to MenuTitle)
+	Items           []SelectionItem           // Selectable items
+	DirectFunction  InteractiveGoFunction     // Function for direct CLI execution with args
+	ExecuteFunction InteractiveGoFunction     // Function for menu-based execution
+}
+
+// convertToDirectExecutor converts an InteractiveGoFunction to work with DirectExecutor signature
+func convertToDirectExecutor(fn InteractiveGoFunction, cliTitle string) func(ctx context.Context, outputChan chan<- string, inputChan <-chan string, args []string) error {
+	return func(ctx context.Context, outputChan chan<- string, inputChan <-chan string, args []string) error {
+		// Convert args to params map for the InteractiveGoFunction
+		params := make(map[string]interface{})
+		for i, arg := range args {
+			params[fmt.Sprintf("arg%d", i)] = arg
+		}
+		params["cliArgs"] = strings.Join(args, " ")
+		
+		// Add CLI title to provide better context
+		if cliTitle != "" {
+			params["cliTitle"] = cliTitle
+		}
+		
+		return fn(ctx, outputChan, inputChan, params)
 	}
 }
 
