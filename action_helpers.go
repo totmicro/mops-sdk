@@ -788,9 +788,7 @@ func generateExamples(commandTitle string, parameters []ParameterDefinition) str
 	
 	// Extract command name from title (remove emojis and extra text)
 	commandName := strings.ToLower(strings.Fields(commandTitle)[len(strings.Fields(commandTitle))-1])
-	if commandName == "login" {
-		commandName = "simple-example login"
-	}
+	// Keep the command name as extracted, without hardcoded plugin references
 	
 	// Find required parameters for minimal example
 	var requiredParams []ParameterDefinition

@@ -68,6 +68,7 @@ type Menu struct {
 type MenuEntry struct {
 	Key           string                 `yaml:"key"`
 	Label         string                 `yaml:"label"`
+	ID            string                 `yaml:"id,omitempty"`          // Unique identifier for CLI auto-execution
 	Action        string                 `yaml:"action"`
 	Target        string                 `yaml:"target,omitempty"`
 	Message       string                 `yaml:"message,omitempty"`
