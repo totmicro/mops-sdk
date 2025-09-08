@@ -80,6 +80,7 @@ type Plugin interface {
 	Initialize(config map[string]any) error
 	RegisterProviders() []DynamicProvider
 	RegisterInteractiveFunctions() map[string]InteractiveGoFunction
+	RegisterEnhancedInteractiveFunctions() map[string]EnhancedInteractiveFunction
 	GetCLICommands() (map[string]CLICommandHandler, error)
 	GetStreamingCLICommands() (map[string]StreamingCLICommandHandler, error)
 	GetMenuEntries() (map[string][]MenuEntry, error)

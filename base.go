@@ -7,24 +7,26 @@ import (
 
 // PluginBase provides a base implementation for mops plugins
 type PluginBase struct {
-	info                 PluginInfo
-	config               map[string]any
-	providers            []DynamicProvider
-	interactiveFunctions map[string]InteractiveGoFunction
-	cliCommands          map[string]CLICommandHandler
-	streamingCLICommands map[string]StreamingCLICommandHandler
-	menuEntries          map[string][]MenuEntry
+	info                        PluginInfo
+	config                      map[string]any
+	providers                   []DynamicProvider
+	interactiveFunctions        map[string]InteractiveGoFunction
+	enhancedInteractiveFunctions map[string]EnhancedInteractiveFunction
+	cliCommands                 map[string]CLICommandHandler
+	streamingCLICommands        map[string]StreamingCLICommandHandler
+	menuEntries                 map[string][]MenuEntry
 }
 
 // NewPluginBase creates a new plugin base
 func NewPluginBase(info PluginInfo) *PluginBase {
 	return &PluginBase{
-		info:                 info,
-		providers:            []DynamicProvider{},
-		interactiveFunctions: make(map[string]InteractiveGoFunction),
-		cliCommands:          make(map[string]CLICommandHandler),
-		streamingCLICommands: make(map[string]StreamingCLICommandHandler),
-		menuEntries:          make(map[string][]MenuEntry),
+		info:                        info,
+		providers:                   []DynamicProvider{},
+		interactiveFunctions:        make(map[string]InteractiveGoFunction),
+		enhancedInteractiveFunctions: make(map[string]EnhancedInteractiveFunction),
+		cliCommands:                 make(map[string]CLICommandHandler),
+		streamingCLICommands:        make(map[string]StreamingCLICommandHandler),
+		menuEntries:                 make(map[string][]MenuEntry),
 	}
 }
 
@@ -47,6 +49,16 @@ func (p *PluginBase) RegisterProviders() []DynamicProvider {
 // RegisterInteractiveFunctions registers interactive functions with mops
 func (p *PluginBase) RegisterInteractiveFunctions() map[string]InteractiveGoFunction {
 	return p.interactiveFunctions
+}
+
+// RegisterEnhancedInteractiveFunctions registers enhanced interactive functions with mops
+func (p *PluginBase) RegisterEnhancedInteractiveFunctions() map[string]EnhancedInteractiveFunction {
+	return p.enhancedInteractiveFunctions
+}
+
+// AddEnhancedInteractiveFunction adds an enhanced interactive function with explicit input request capabilities
+func (p *PluginBase) AddEnhancedInteractiveFunction(name string, fn EnhancedInteractiveFunction) {
+	p.enhancedInteractiveFunctions[name] = fn
 }
 
 // GetCLICommands returns CLI command handlers

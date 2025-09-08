@@ -291,7 +291,23 @@ func BoolParameter(name, description string, defaultValue bool) ParameterDefinit
 // WithBasicMenuProvider: Quickly define a main menu with minimal code
 func (b *PluginBuilder) WithBasicMenuProvider(entries []MenuEntry) *PluginBuilder {
 	return b.WithMenuProvider("main", "main", "Main menu", func(param string) ([]MenuEntry, error) {
-		return entries, nil
+		// Automatically prefix menu entry IDs with plugin name to ensure uniqueness
+		pluginName := b.getInfo().Name
+		var prefixedEntries []MenuEntry
+		
+		for _, entry := range entries {
+			// Create a copy of the entry to avoid modifying the original
+			prefixedEntry := entry
+			
+			// Only prefix ID if it doesn't already contain a colon (plugin prefix)
+			if entry.ID != "" && !strings.Contains(entry.ID, ":") {
+				prefixedEntry.ID = pluginName + ":" + entry.ID
+			}
+			
+			prefixedEntries = append(prefixedEntries, prefixedEntry)
+		}
+		
+		return prefixedEntries, nil
 	})
 }
 
@@ -619,6 +635,9 @@ func SelectionAction(name, description, menuTarget string, directFunction Intera
 // MenuProviderAction creates a standardized menu provider with auto-numbered entries
 // that work with CLI arguments and UI interaction
 func (b *PluginBuilder) WithSelectionMenuProvider(menuID, title string, items []SelectionItem, executeFunction InteractiveGoFunction) *PluginBuilder {
+	// Create executor name with plugin prefix
+	executorName := b.getStandardName(fmt.Sprintf("%s_execute", menuID))
+	
 	return b.WithMenuProvider(menuID, menuID, title, func(param string) ([]MenuEntry, error) {
 		var entries []MenuEntry
 		
@@ -636,14 +655,14 @@ func (b *PluginBuilder) WithSelectionMenuProvider(menuID, title string, items []
 				Key:     fmt.Sprintf("%d", i+1),
 				Label:   fmt.Sprintf("%s %s - %s", item.Icon, item.Name, item.Description),
 				Action:  "core_interactive-go",
-				Command: fmt.Sprintf("%s_execute", menuID),
+				Command: executorName,
 				Message: message,
 				Params: item.Params,
 			})
 		}
 		
 		return entries, nil
-	}).WithInteractiveFunction(fmt.Sprintf("%s_execute", menuID), executeFunction)
+	}).WithInteractiveFunction(executorName, executeFunction)
 }
 
 // SelectionItem represents a selectable item in a menu
@@ -674,7 +693,7 @@ func (b *PluginBuilder) WithArgumentBasedAction(config ArgumentBasedActionConfig
 		Command:             config.CommandName,
 		Description:         config.Description,
 		Usage:               fmt.Sprintf("%s [args...]", config.CommandName),
-		SmartFunctionName:   fmt.Sprintf("%s_smart_%s", config.CommandName, strings.ReplaceAll(strings.ToLower(cliTitle), " ", "_")),
+		SmartFunctionName:   b.getStandardName(fmt.Sprintf("%s_smart_%s", config.CommandName, strings.ReplaceAll(strings.ToLower(cliTitle), " ", "_"))),
 		UITarget:            fullMenuID, // Use the full prefixed menu ID
 		UITitle:             cliTitle,   // Pass CLI title for Bubble Tea display
 		DirectHandler:       nil, // We'll use DirectExecutor instead

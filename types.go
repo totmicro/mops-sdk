@@ -19,6 +19,17 @@ type ActionResult struct {
 // InteractiveGoFunction represents a Go function that can be executed with real-time interaction
 type InteractiveGoFunction func(ctx context.Context, outputChan chan<- string, inputChan <-chan string, params map[string]interface{}) error
 
+// InputRequester provides methods for functions to explicitly request user input
+type InputRequester interface {
+	// RequestInput sends a prompt and waits for user input
+	RequestInput(prompt string) (string, error)
+	// RequestInputWithDefault sends a prompt with a default value
+	RequestInputWithDefault(prompt string, defaultValue string) (string, error)
+}
+
+// EnhancedInteractiveFunction represents an interactive function with explicit input request capabilities
+type EnhancedInteractiveFunction func(ctx context.Context, outputChan chan<- string, inputRequester InputRequester, params map[string]interface{}) error
+
 // DynamicProvider is an interface that provides dynamic menu entries
 type DynamicProvider interface {
 	GetName() string

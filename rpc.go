@@ -614,6 +614,22 @@ var (
 	sessionMutex      sync.RWMutex
 )
 
+// setSessionInputState updates the input state for a session
+func setSessionInputState(sessionID string, waitingForInput bool, prompt string) {
+	sessionMutex.RLock()
+	session, exists := streamingSessions[sessionID]
+	sessionMutex.RUnlock()
+	
+	if !exists {
+		return // Session not found, ignore
+	}
+	
+	session.mu.Lock()
+	session.WaitingForInput = waitingForInput
+	session.InputPrompt = prompt
+	session.mu.Unlock()
+}
+
 type InteractiveStreamSession struct {
 	FunctionName   string
 	Params         map[string]interface{}
@@ -626,31 +642,44 @@ type InteractiveStreamSession struct {
 	LastSentIndex  int  // Track what has been sent to avoid duplicates
 	Completed      bool
 	FinalError     error
+	WaitingForInput bool   // Track if function is waiting for input
+	InputPrompt     string // Current input prompt
 	mu             sync.RWMutex
 }
 
 func (s *PluginRPCServer) InitInteractiveStream(args *InteractiveStreamInitArgs, resp *InteractiveStreamInitResponse) error {
 	sessionID := fmt.Sprintf("session_%d_%s", time.Now().UnixNano(), args.FunctionName)
 	
-	functions := s.Impl.RegisterInteractiveFunctions()
-	fn, exists := functions[args.FunctionName]
-	if !exists {
-		resp.Error = fmt.Errorf("function %s not found", args.FunctionName)
-		return nil
+	// First try to find enhanced interactive function
+	enhancedFunctions := s.Impl.RegisterEnhancedInteractiveFunctions()
+	enhancedFn, isEnhanced := enhancedFunctions[args.FunctionName]
+	
+	// If not found, try regular interactive functions
+	var regularFn InteractiveGoFunction
+	var exists bool
+	if !isEnhanced {
+		functions := s.Impl.RegisterInteractiveFunctions()
+		regularFn, exists = functions[args.FunctionName]
+		if !exists {
+			resp.Error = fmt.Errorf("function %s not found", args.FunctionName)
+			return nil
+		}
 	}
 	
 	ctx, cancel := context.WithCancel(context.Background())
 	session := &InteractiveStreamSession{
-		FunctionName:  args.FunctionName,
-		Params:        args.Params,
-		OutputChan:    make(chan string, 1000),
-		InputChan:     make(chan string, 100),
-		ErrorChan:     make(chan error, 1),
-		Context:       ctx,
-		Cancel:        cancel,
-		OutputBuffer:  make([]string, 0),
-		LastSentIndex: 0,
-		Completed:     false,
+		FunctionName:    args.FunctionName,
+		Params:          args.Params,
+		OutputChan:      make(chan string, 1000),
+		InputChan:       make(chan string, 100),
+		ErrorChan:       make(chan error, 1),
+		Context:         ctx,
+		Cancel:          cancel,
+		OutputBuffer:    make([]string, 0),
+		LastSentIndex:   0,
+		Completed:       false,
+		WaitingForInput: false,
+		InputPrompt:     "",
 	}
 	
 	sessionMutex.Lock()
@@ -667,7 +696,15 @@ func (s *PluginRPCServer) InitInteractiveStream(args *InteractiveStreamInitArgs,
 			session.mu.Unlock()
 		}()
 		
-		err := fn(session.Context, session.OutputChan, session.InputChan, session.Params)
+		var err error
+		if isEnhanced {
+			// Create InputRequester with session ID for enhanced functions
+			inputRequester := NewInputRequesterWithSession(session.Context, session.OutputChan, session.InputChan, sessionID)
+			err = enhancedFn(session.Context, session.OutputChan, inputRequester, session.Params)
+		} else {
+			// Use regular function signature
+			err = regularFn(session.Context, session.OutputChan, session.InputChan, session.Params)
+		}
 		
 		session.mu.Lock()
 		session.FinalError = err
@@ -760,6 +797,8 @@ func (s *PluginRPCServer) GetInteractiveStreamOutput(args *InteractiveStreamOutp
 	resp.NewOutput = newOutput
 	resp.Completed = completed
 	resp.Error = finalError
+	resp.NeedsInput = session.WaitingForInput
+	resp.InputPrompt = session.InputPrompt
 	
 	return nil
 }
@@ -888,9 +927,11 @@ type InteractiveStreamOutputArgs struct {
 }
 
 type InteractiveStreamOutputResponse struct {
-	NewOutput []string
-	Completed bool
-	Error     error
+	NewOutput     []string
+	Completed     bool
+	Error         error
+	NeedsInput    bool   // Indicates if the function is waiting for user input
+	InputPrompt   string // Optional prompt message for the input
 }
 
 type InteractiveStreamCleanupArgs struct {
