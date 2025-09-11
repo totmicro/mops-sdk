@@ -7,26 +7,24 @@ import (
 
 // PluginBase provides a base implementation for mops plugins
 type PluginBase struct {
-	info                        PluginInfo
-	config                      map[string]any
-	providers                   []DynamicProvider
-	interactiveFunctions        map[string]InteractiveGoFunction
-	enhancedInteractiveFunctions map[string]EnhancedInteractiveFunction
-	cliCommands                 map[string]CLICommandHandler
-	streamingCLICommands        map[string]StreamingCLICommandHandler
-	menuEntries                 map[string][]MenuEntry
+	info                 PluginInfo
+	config               map[string]any
+	providers            []DynamicProvider
+	interactiveFunctions map[string]InteractiveGoFunction
+	cliCommands          map[string]CLICommandHandler
+	streamingCLICommands map[string]StreamingCLICommandHandler
+	menuEntries          map[string][]MenuEntry
 }
 
 // NewPluginBase creates a new plugin base
 func NewPluginBase(info PluginInfo) *PluginBase {
 	return &PluginBase{
-		info:                        info,
-		providers:                   []DynamicProvider{},
-		interactiveFunctions:        make(map[string]InteractiveGoFunction),
-		enhancedInteractiveFunctions: make(map[string]EnhancedInteractiveFunction),
-		cliCommands:                 make(map[string]CLICommandHandler),
-		streamingCLICommands:        make(map[string]StreamingCLICommandHandler),
-		menuEntries:                 make(map[string][]MenuEntry),
+		info:                 info,
+		providers:            []DynamicProvider{},
+		interactiveFunctions: make(map[string]InteractiveGoFunction),
+		cliCommands:          make(map[string]CLICommandHandler),
+		streamingCLICommands: make(map[string]StreamingCLICommandHandler),
+		menuEntries:          make(map[string][]MenuEntry),
 	}
 }
 
@@ -49,16 +47,6 @@ func (p *PluginBase) RegisterProviders() []DynamicProvider {
 // RegisterInteractiveFunctions registers interactive functions with mops
 func (p *PluginBase) RegisterInteractiveFunctions() map[string]InteractiveGoFunction {
 	return p.interactiveFunctions
-}
-
-// RegisterEnhancedInteractiveFunctions registers enhanced interactive functions with mops
-func (p *PluginBase) RegisterEnhancedInteractiveFunctions() map[string]EnhancedInteractiveFunction {
-	return p.enhancedInteractiveFunctions
-}
-
-// AddEnhancedInteractiveFunction adds an enhanced interactive function with explicit input request capabilities
-func (p *PluginBase) AddEnhancedInteractiveFunction(name string, fn EnhancedInteractiveFunction) {
-	p.enhancedInteractiveFunctions[name] = fn
 }
 
 // GetCLICommands returns CLI command handlers
@@ -135,7 +123,7 @@ func (p *SimpleProvider) GetName() string {
 	return p.name
 }
 
-// GetDescription returns the provider description  
+// GetDescription returns the provider description
 func (p *SimpleProvider) GetDescription() string {
 	return "Simple provider" // Default description
 }
@@ -149,6 +137,7 @@ func (p *SimpleProvider) GenerateEntries(param string) ([]MenuEntry, error) {
 func (p *SimpleProvider) SupportsRefresh() bool {
 	return false // Default implementation
 }
+
 // StandardProvider provides a provider with standardized naming and metadata
 type StandardProvider struct {
 	name         string
@@ -251,7 +240,7 @@ func (p *UnifiedProvider) GenerateEntries(param string) ([]MenuEntry, error) {
 	// Parse the parameter to determine type and title
 	// Expected format: "type:title" or just "title" (defaults to menu)
 	var providerType, title string
-	
+
 	if strings.Contains(param, ":") {
 		parts := strings.SplitN(param, ":", 2)
 		providerType = parts[0]
@@ -260,13 +249,13 @@ func (p *UnifiedProvider) GenerateEntries(param string) ([]MenuEntry, error) {
 		providerType = "menu"
 		title = param
 	}
-	
+
 	key := fmt.Sprintf("%s:%s", providerType, title)
-	
+
 	if handler, exists := p.handlers[key]; exists {
 		return handler(param)
 	}
-	
+
 	// Return empty if no handler found
 	return []MenuEntry{}, nil
 }

@@ -27,8 +27,7 @@ type InputRequester interface {
 	RequestInputWithDefault(prompt string, defaultValue string) (string, error)
 }
 
-// EnhancedInteractiveFunction represents an interactive function with explicit input request capabilities
-type EnhancedInteractiveFunction func(ctx context.Context, outputChan chan<- string, inputRequester InputRequester, params map[string]interface{}) error
+// InteractiveGoFunction represents a Go function that can handle bidirectional communication
 
 // DynamicProvider is an interface that provides dynamic menu entries
 type DynamicProvider interface {

@@ -20,23 +20,23 @@ type ConfigPreset struct {
 
 // PluginInfo contains metadata about a plugin
 type PluginInfo struct {
-	Name              string                 `json:"name"`
-	Version           string                 `json:"version"`
-	Description       string                 `json:"description"`
-	DisplayName       string                 `json:"display_name,omitempty"`  // Optional display name for UI
-	Author            string                 `json:"author"`
-	License           string                 `json:"license"`
-	Homepage          string                 `json:"homepage"`
-	MopsMinVersion    string                 `json:"mops_min_version"`
-	MopsMaxVersion    string                 `json:"mops_max_version"`
-	Dependencies      []string               `json:"dependencies"`
-	Tags              []string               `json:"tags"`
-	CLICommands       []CLICommandInfo       `json:"cli_commands"`
-	DefaultConfig     map[string]any         `json:"default_config"`
-	ConfigPresets     map[string]ConfigPreset `json:"config_presets,omitempty"`
-	Platform          PlatformInfo           `json:"platform"`
-	SupportedPlatforms []PlatformInfo        `json:"supported_platforms"`
-	MenuIntegration   *PluginMenuIntegration `json:"menu_integration,omitempty"`
+	Name               string                  `json:"name"`
+	Version            string                  `json:"version"`
+	Description        string                  `json:"description"`
+	DisplayName        string                  `json:"display_name,omitempty"` // Optional display name for UI
+	Author             string                  `json:"author"`
+	License            string                  `json:"license"`
+	Homepage           string                  `json:"homepage"`
+	MopsMinVersion     string                  `json:"mops_min_version"`
+	MopsMaxVersion     string                  `json:"mops_max_version"`
+	Dependencies       []string                `json:"dependencies"`
+	Tags               []string                `json:"tags"`
+	CLICommands        []CLICommandInfo        `json:"cli_commands"`
+	DefaultConfig      map[string]any          `json:"default_config"`
+	ConfigPresets      map[string]ConfigPreset `json:"config_presets,omitempty"`
+	Platform           PlatformInfo            `json:"platform"`
+	SupportedPlatforms []PlatformInfo          `json:"supported_platforms"`
+	MenuIntegration    *PluginMenuIntegration  `json:"menu_integration,omitempty"`
 }
 
 // CLICommandInfo describes a CLI command provided by the plugin
@@ -45,13 +45,13 @@ type CLICommandInfo struct {
 	Description string   `json:"description"`
 	Usage       string   `json:"usage"`
 	Examples    []string `json:"examples"`
-	Hidden      bool     `json:"hidden,omitempty"`      // Hide this command from CLI help and prevent execution with args
-	
+	Hidden      bool     `json:"hidden,omitempty"` // Hide this command from CLI help and prevent execution with args
+
 	// UI Action mapping - allows CLI commands to specify their UI equivalent
-	UIAction    string `json:"ui_action,omitempty"`    // The UI action type (e.g., "goto", "core_interactive-go", "action")
-	UITarget    string `json:"ui_target,omitempty"`    // For goto actions - the target menu/provider
-	UICommand   string `json:"ui_command,omitempty"`   // For core_interactive-go actions - the command to execute
-	UITitle     string `json:"ui_title,omitempty"`     // Custom title for Bubble Tea UI when executed via CLI
+	UIAction  string `json:"ui_action,omitempty"`  // The UI action type (e.g., "goto", "core_interactive-go", "action")
+	UITarget  string `json:"ui_target,omitempty"`  // For goto actions - the target menu/provider
+	UICommand string `json:"ui_command,omitempty"` // For core_interactive-go actions - the command to execute
+	UITitle   string `json:"ui_title,omitempty"`   // Custom title for Bubble Tea UI when executed via CLI
 }
 
 // CLICommandHandler handles CLI command execution
@@ -64,12 +64,12 @@ type StreamingCLICommandHandler interface {
 
 	// GetHelp returns help information for the command
 	GetHelp() string
-	
+
 	// ExecuteStreaming runs the CLI command with real-time output streaming
 	// outputChan receives output lines as they are generated
 	// The channel is closed when the command completes
 	ExecuteStreaming(ctx context.Context, args []string, outputChan chan<- string) error
-	
+
 	// SupportsStreaming indicates if this command supports real-time streaming
 	SupportsStreaming() bool
 }
@@ -80,7 +80,6 @@ type Plugin interface {
 	Initialize(config map[string]any) error
 	RegisterProviders() []DynamicProvider
 	RegisterInteractiveFunctions() map[string]InteractiveGoFunction
-	RegisterEnhancedInteractiveFunctions() map[string]EnhancedInteractiveFunction
 	GetCLICommands() (map[string]CLICommandHandler, error)
 	GetStreamingCLICommands() (map[string]StreamingCLICommandHandler, error)
 	GetMenuEntries() (map[string][]MenuEntry, error)
@@ -108,19 +107,23 @@ type PluginMenuIntegration struct {
 
 // PluginMetadata represents the plugin.yaml file structure
 type PluginMetadata struct {
-	Name            string                 `yaml:"name"`
-	Version         string                 `yaml:"version"`
-	Description     string                 `yaml:"description"`
-	Author          string                 `yaml:"author"`
-	License         string                 `yaml:"license"`
-	Homepage        string                 `yaml:"homepage"`
-	Repository      string                 `yaml:"repository"`
-	Tags            []string               `yaml:"tags"`
-	MopsVersion     MopsVersionConstraint  `yaml:"mops_version"`
-	BuildTargets    []BuildTarget          `yaml:"build_targets"`
-	DefaultConfig   map[string]any         `yaml:"default_config"`
-	CLICommands     []CLICommandInfo       `yaml:"cli_commands"`
-	MenuIntegration *PluginMenuIntegration `yaml:"menu_integration,omitempty"`
+	Name               string                         `yaml:"name"`
+	Version            string                         `yaml:"version"`
+	Description        string                         `yaml:"description"`
+	DisplayName        string                         `yaml:"display_name,omitempty"`
+	Author             string                         `yaml:"author"`
+	License            string                         `yaml:"license"`
+	Homepage           string                         `yaml:"homepage"`
+	Repository         string                         `yaml:"repository"`
+	Category           string                         `yaml:"category"`
+	Tags               []string                       `yaml:"tags"`
+	MinimumMopsVersion string                         `yaml:"minimum_mops_version"`
+	MopsVersion        MopsVersionConstraint          `yaml:"mops_version"`
+	BuildTargets       []BuildTarget                  `yaml:"build_targets"`
+	DefaultConfig      map[string]any                 `yaml:"default_config"`
+	ConfigPresets      map[string]ConfigPreset        `yaml:"config_presets,omitempty"`
+	CLICommands        []CLICommandInfo               `yaml:"cli_commands"`
+	MenuIntegration    *PluginMenuIntegration         `yaml:"menu_integration,omitempty"`
 }
 
 // MopsVersionConstraint represents MOPS version compatibility
@@ -150,18 +153,18 @@ type RepositoryRegistry struct {
 
 // RepositoryPlugin represents a plugin entry in a repository registry
 type RepositoryPlugin struct {
-	Name         string                            `json:"name"`
-	Version      string                            `json:"version"`
-	Description  string                            `json:"description"`
-	Author       string                            `json:"author"`
-	License      string                            `json:"license"`
-	Homepage     string                            `json:"homepage"`
-	Repository   string                            `json:"repository"`
-	Tags         []string                          `json:"tags"`
-	MopsVersion  MopsVersionConstraint             `json:"mops_version"`
-	Platforms    map[string]RepositoryPluginAsset  `json:"platforms"`
-	Checksums    map[string]string                 `json:"checksums"`
-	LastUpdated  time.Time                         `json:"last_updated"`
+	Name        string                           `json:"name"`
+	Version     string                           `json:"version"`
+	Description string                           `json:"description"`
+	Author      string                           `json:"author"`
+	License     string                           `json:"license"`
+	Homepage    string                           `json:"homepage"`
+	Repository  string                           `json:"repository"`
+	Tags        []string                         `json:"tags"`
+	MopsVersion MopsVersionConstraint            `json:"mops_version"`
+	Platforms   map[string]RepositoryPluginAsset `json:"platforms"`
+	Checksums   map[string]string                `json:"checksums"`
+	LastUpdated time.Time                        `json:"last_updated"`
 }
 
 // RepositoryPluginAsset represents a platform-specific plugin asset

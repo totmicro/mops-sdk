@@ -650,20 +650,12 @@ type InteractiveStreamSession struct {
 func (s *PluginRPCServer) InitInteractiveStream(args *InteractiveStreamInitArgs, resp *InteractiveStreamInitResponse) error {
 	sessionID := fmt.Sprintf("session_%d_%s", time.Now().UnixNano(), args.FunctionName)
 	
-	// First try to find enhanced interactive function
-	enhancedFunctions := s.Impl.RegisterEnhancedInteractiveFunctions()
-	enhancedFn, isEnhanced := enhancedFunctions[args.FunctionName]
-	
-	// If not found, try regular interactive functions
-	var regularFn InteractiveGoFunction
-	var exists bool
-	if !isEnhanced {
-		functions := s.Impl.RegisterInteractiveFunctions()
-		regularFn, exists = functions[args.FunctionName]
-		if !exists {
-			resp.Error = fmt.Errorf("function %s not found", args.FunctionName)
-			return nil
-		}
+	// Get regular interactive functions
+	functions := s.Impl.RegisterInteractiveFunctions()
+	fn, exists := functions[args.FunctionName]
+	if !exists {
+		resp.Error = fmt.Errorf("function %s not found", args.FunctionName)
+		return nil
 	}
 	
 	ctx, cancel := context.WithCancel(context.Background())
@@ -696,15 +688,7 @@ func (s *PluginRPCServer) InitInteractiveStream(args *InteractiveStreamInitArgs,
 			session.mu.Unlock()
 		}()
 		
-		var err error
-		if isEnhanced {
-			// Create InputRequester with session ID for enhanced functions
-			inputRequester := NewInputRequesterWithSession(session.Context, session.OutputChan, session.InputChan, sessionID)
-			err = enhancedFn(session.Context, session.OutputChan, inputRequester, session.Params)
-		} else {
-			// Use regular function signature
-			err = regularFn(session.Context, session.OutputChan, session.InputChan, session.Params)
-		}
+		err := fn(session.Context, session.OutputChan, session.InputChan, session.Params)
 		
 		session.mu.Lock()
 		session.FinalError = err
