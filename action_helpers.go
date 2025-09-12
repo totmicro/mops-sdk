@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
-	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -321,51 +320,45 @@ func (b *PluginBuilder) WithMenuStartupShortcut(command, menuID, description str
 	})
 }
 
-// WithAutoConfigPresets: Auto-load config presets from plugin.yaml
+// WithAutoConfigPresets: Auto-load config presets from embedded metadata with hierarchical inheritance
 func (b *PluginBuilder) WithAutoConfigPresets() *PluginBuilder {
-	// Get the plugin name for path construction
-	pluginName := b.getInfo().Name
+	// Get the plugin info which should have embedded metadata loaded
+	info := b.getInfo()
 	
-	// List of possible paths to search for plugin.yaml
-	searchPaths := []string{
-		"plugin.yaml",
-		filepath.Join("..", "mops-plugins", "plugins", pluginName, "plugin.yaml"),
-		filepath.Join("plugins", pluginName, "plugin.yaml"),
+	// Extract global config as base configuration from presets
+	var globalConfig map[string]interface{}
+	if globalPreset, exists := info.ConfigPresets["global"]; exists {
+		globalConfig = globalPreset.Config
+		// Remove global from selectable presets since it's just a base
+		delete(info.ConfigPresets, "global")
 	}
 	
-	var yamlData []byte
-	var err error
-	
-	// Try each search path
-	for _, path := range searchPaths {
-		yamlData, err = ioutil.ReadFile(path)
-		if err == nil {
-			break
+	// Process each remaining preset with hierarchical inheritance
+	for presetName, preset := range info.ConfigPresets {
+		// Start with global config as base
+		mergedConfig := make(map[string]interface{})
+		if globalConfig != nil {
+			for key, value := range globalConfig {
+				mergedConfig[key] = value
+			}
 		}
-	}
-	
-	if err != nil {
-		// If plugin.yaml doesn't exist in any location, just return without error
-		return b
-	}
-	
-	// Parse the YAML file
-	var metadata struct {
-		ConfigPresets map[string]struct {
-			Name        string                 `yaml:"name"`
-			Description string                 `yaml:"description"`
-			Config      map[string]interface{} `yaml:"config"`
-		} `yaml:"config_presets"`
-	}
-	
-	if err := yaml.Unmarshal(yamlData, &metadata); err != nil {
-		// If parsing fails, just return without error
-		return b
-	}
-	
-	// Register each config preset
-	for presetName, preset := range metadata.ConfigPresets {
-		b.WithConfigPreset(presetName, preset.Name, preset.Description, preset.Config)
+		
+		// Merge preset-specific config (overwrites global values)
+		for key, value := range preset.Config {
+			mergedConfig[key] = value
+		}
+		
+		// Update the preset with merged config
+		info.ConfigPresets[presetName] = ConfigPreset{
+			Name:        preset.Name,
+			Description: preset.Description,
+			Config:      mergedConfig,
+		}
+		
+		// If this is the default preset, also set it as the plugin's default config
+		if presetName == "default" {
+			info.DefaultConfig = mergedConfig
+		}
 	}
 	
 	return b

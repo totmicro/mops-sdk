@@ -60,9 +60,53 @@ func NewPluginBuilderFromMetadata(metadata *PluginMetadata) *PluginBuilder {
 		builder.AddTag(tag)
 	}
 
-	// Set default config if available
+	// Handle hierarchical config presets with global base
+	var globalConfig map[string]interface{}
+	if globalPreset, exists := metadata.ConfigPresets["global"]; exists {
+		globalConfig = globalPreset.Config
+	}
+	
+	// Process each preset (excluding global)
+	for presetName, preset := range metadata.ConfigPresets {
+		if presetName == "global" {
+			continue // Skip global preset as it's not a selectable preset
+		}
+		
+		// Start with global config as base
+		mergedConfig := make(map[string]interface{})
+		if globalConfig != nil {
+			for key, value := range globalConfig {
+				mergedConfig[key] = value
+			}
+		}
+		
+		// Merge preset-specific config (overwrites global values)
+		for key, value := range preset.Config {
+			mergedConfig[key] = value
+		}
+		
+		// Register the merged preset
+		builder.WithConfigPreset(presetName, preset.Name, preset.Description, mergedConfig)
+		
+		// If this is the default preset, also set it as the plugin's default config
+		if presetName == "default" {
+			builder.SetDefaultConfig(mergedConfig)
+		}
+	}
+
+	// Set default config if available and no default preset was found
 	if metadata.DefaultConfig != nil {
-		builder.SetDefaultConfig(metadata.DefaultConfig)
+		// Only set if no default preset was processed
+		hasDefaultPreset := false
+		for presetName := range metadata.ConfigPresets {
+			if presetName == "default" {
+				hasDefaultPreset = true
+				break
+			}
+		}
+		if !hasDefaultPreset {
+			builder.SetDefaultConfig(metadata.DefaultConfig)
+		}
 	}
 
 	return builder
