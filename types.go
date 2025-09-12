@@ -3,6 +3,7 @@ package sdk
 
 import (
 	"context"
+	"time"
 )
 
 // ActionResult represents the result of executing an action
@@ -100,4 +101,16 @@ type MenuAction struct {
 	Command string                 `yaml:"command,omitempty"`
 	NextID  string                 `yaml:"next_id,omitempty"`
 	Params  map[string]interface{} `yaml:"params,omitempty"`
+}
+
+// BinaryInstallerInterface provides methods for cross-platform binary installation
+type BinaryInstallerInterface interface {
+	// InstallBinary performs cross-platform binary installation
+	InstallBinary(config *BinaryInstallConfig) error
+	// CheckBinaryInstalled checks if a binary is installed and returns version info
+	CheckBinaryInstalled(binaryName string) (bool, string, error)
+	// GetPlatformInfo returns information about the current platform
+	GetPlatformInfo() *PlatformInfo
+	// SetDownloadTimeout sets the timeout for download operations
+	SetDownloadTimeout(timeout time.Duration)
 }

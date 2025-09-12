@@ -5,12 +5,6 @@ import (
 	"time"
 )
 
-// PlatformInfo represents platform information for plugin distribution
-type PlatformInfo struct {
-	OS   string `json:"os"`
-	Arch string `json:"arch"`
-}
-
 // ConfigPreset represents a plugin configuration preset
 type ConfigPreset struct {
 	Name        string                 `json:"name"`
@@ -169,7 +163,10 @@ type RepositoryPlugin struct {
 
 // RepositoryPluginAsset represents a platform-specific plugin asset
 type RepositoryPluginAsset struct {
-	Platform    PlatformInfo `json:"platform"`
+	Platform    struct {
+		OS   string `json:"os"`
+		Arch string `json:"arch"`
+	} `json:"platform"`
 	DownloadURL string       `json:"download_url"`
 	Size        int64        `json:"size"`
 	Checksum    string       `json:"checksum"`
