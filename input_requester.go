@@ -63,3 +63,21 @@ func (r *inputRequesterImpl) RequestInputWithDefault(prompt string, defaultValue
 		return "", r.ctx.Err()
 	}
 }
+
+// RequestPassword sends a prompt and waits for hidden password input
+func (r *inputRequesterImpl) RequestPassword(prompt string) (string, error) {
+	// Send password input request with special marker for MOPS core TUI to recognize
+	select {
+	case r.outputChan <- fmt.Sprintf("PASSWORD_INPUT_REQUEST: %s", prompt):
+	case <-r.ctx.Done():
+		return "", r.ctx.Err()
+	}
+	
+	// Wait for user input (password will be hidden in TUI)
+	select {
+	case input := <-r.inputChan:
+		return input, nil
+	case <-r.ctx.Done():
+		return "", r.ctx.Err()
+	}
+}

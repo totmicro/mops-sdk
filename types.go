@@ -25,6 +25,8 @@ type InputRequester interface {
 	RequestInput(prompt string) (string, error)
 	// RequestInputWithDefault sends a prompt with a default value
 	RequestInputWithDefault(prompt string, defaultValue string) (string, error)
+	// RequestPassword sends a prompt and waits for hidden password input
+	RequestPassword(prompt string) (string, error)
 }
 
 // InteractiveGoFunction represents a Go function that can handle bidirectional communication
