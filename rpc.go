@@ -72,6 +72,20 @@ func (g *PluginRPCClient) Initialize(config map[string]any) error {
 	return resp
 }
 
+func (g *PluginRPCClient) ReloadConfig(config map[string]any) error {
+	configJSON, err := json.Marshal(config)
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %w", err)
+	}
+
+	var resp error
+	err = g.client.Call("Plugin.ReloadConfig", string(configJSON), &resp)
+	if err != nil {
+		return err
+	}
+	return resp
+}
+
 func (g *PluginRPCClient) RegisterProviders() []DynamicProvider {
 	var resp []DynamicProviderRPC
 	err := g.client.Call("Plugin.RegisterProviders", new(interface{}), &resp)
@@ -389,6 +403,17 @@ func (s *PluginRPCServer) Initialize(configJSON string, resp *error) error {
 	}
 
 	*resp = s.Impl.Initialize(config)
+	return nil
+}
+
+func (s *PluginRPCServer) ReloadConfig(configJSON string, resp *error) error {
+	var config map[string]any
+	if err := json.Unmarshal([]byte(configJSON), &config); err != nil {
+		*resp = fmt.Errorf("failed to unmarshal config: %w", err)
+		return nil
+	}
+
+	*resp = s.Impl.ReloadConfig(config)
 	return nil
 }
 

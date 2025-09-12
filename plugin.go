@@ -72,6 +72,7 @@ type StreamingCLICommandHandler interface {
 type Plugin interface {
 	GetInfo() PluginInfo
 	Initialize(config map[string]any) error
+	ReloadConfig(config map[string]any) error
 	RegisterProviders() []DynamicProvider
 	RegisterInteractiveFunctions() map[string]InteractiveGoFunction
 	GetCLICommands() (map[string]CLICommandHandler, error)

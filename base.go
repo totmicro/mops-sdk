@@ -40,6 +40,12 @@ func (p *PluginBase) Initialize(config map[string]any) error {
 	return nil
 }
 
+// ReloadConfig reloads the plugin configuration without full restart
+func (p *PluginBase) ReloadConfig(config map[string]any) error {
+	p.config = config
+	return nil
+}
+
 // RegisterProviders registers dynamic providers with mops
 func (p *PluginBase) RegisterProviders() []DynamicProvider {
 	return p.providers
