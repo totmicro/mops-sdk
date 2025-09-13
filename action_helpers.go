@@ -47,15 +47,16 @@ const (
 
 // ParameterDefinition defines validation rules and metadata for a parameter
 type ParameterDefinition struct {
-	Name        string        // Parameter name (used for flag parsing, e.g., "profile")
-	Description string        // Human-readable description
-	Type        ParameterType // Parameter data type
-	Required    bool          // Whether parameter is required
-	Default     string        // Default value if not provided
-	Pattern     string        // Regex pattern for validation (optional)
-	MinValue    *int          // Minimum value for numeric types (optional)
-	MaxValue    *int          // Maximum value for numeric types (optional)
-	Choices     []string      // Valid choices for the parameter (optional)
+	Name         string        // Parameter name (used for flag parsing, e.g., "profile")
+	Description  string        // Human-readable description
+	Type         ParameterType // Parameter data type
+	Required     bool          // Whether parameter is required
+	Default      string        // Default value if not provided
+	Pattern      string        // Regex pattern for validation (optional)
+	MinValue     *int          // Minimum value for numeric types (optional)
+	MaxValue     *int          // Maximum value for numeric types (optional)
+	Choices      []string      // Valid choices for the parameter (optional)
+	ExampleValue string        // Custom example value for documentation (optional)
 }
 
 // ValidationError represents a parameter validation error
@@ -223,6 +224,17 @@ func RequiredStringParam(name, description string) ParameterDefinition {
 	}
 }
 
+// RequiredStringParamWithExample creates a required string parameter with custom example
+func RequiredStringParamWithExample(name, description, exampleValue string) ParameterDefinition {
+	return ParameterDefinition{
+		Name:         name,
+		Description:  description,
+		Type:         StringParam,
+		Required:     true,
+		ExampleValue: exampleValue,
+	}
+}
+
 // OptionalStringParam creates an optional string parameter with default value
 func OptionalStringParam(name, description, defaultValue string) ParameterDefinition {
 	return ParameterDefinition{
@@ -231,6 +243,18 @@ func OptionalStringParam(name, description, defaultValue string) ParameterDefini
 		Type:        StringParam,
 		Required:    false,
 		Default:     defaultValue,
+	}
+}
+
+// OptionalStringParamWithExample creates an optional string parameter with default and example
+func OptionalStringParamWithExample(name, description, defaultValue, exampleValue string) ParameterDefinition {
+	return ParameterDefinition{
+		Name:         name,
+		Description:  description,
+		Type:         StringParam,
+		Required:     false,
+		Default:      defaultValue,
+		ExampleValue: exampleValue,
 	}
 }
 
@@ -244,6 +268,17 @@ func RequiredIntParam(name, description string) ParameterDefinition {
 	}
 }
 
+// RequiredIntParamWithExample creates a required integer parameter with example
+func RequiredIntParamWithExample(name, description, exampleValue string) ParameterDefinition {
+	return ParameterDefinition{
+		Name:         name,
+		Description:  description,
+		Type:         IntParam,
+		Required:     true,
+		ExampleValue: exampleValue,
+	}
+}
+
 // OptionalIntParam creates an optional integer parameter with default value
 func OptionalIntParam(name, description string, defaultValue int) ParameterDefinition {
 	return ParameterDefinition{
@@ -252,6 +287,18 @@ func OptionalIntParam(name, description string, defaultValue int) ParameterDefin
 		Type:        IntParam,
 		Required:    false,
 		Default:     fmt.Sprintf("%d", defaultValue),
+	}
+}
+
+// OptionalIntParamWithExample creates an optional integer parameter with default and example
+func OptionalIntParamWithExample(name, description string, defaultValue int, exampleValue string) ParameterDefinition {
+	return ParameterDefinition{
+		Name:         name,
+		Description:  description,
+		Type:         IntParam,
+		Required:     false,
+		Default:      fmt.Sprintf("%d", defaultValue),
+		ExampleValue: exampleValue,
 	}
 }
 
@@ -284,6 +331,18 @@ func BoolParameter(name, description string, defaultValue bool) ParameterDefinit
 		Type:        BoolParam,
 		Required:    false,
 		Default:     fmt.Sprintf("%t", defaultValue),
+	}
+}
+
+// BoolParameterWithExample creates a boolean parameter with custom example
+func BoolParameterWithExample(name, description string, defaultValue bool, exampleValue string) ParameterDefinition {
+	return ParameterDefinition{
+		Name:         name,
+		Description:  description,
+		Type:         BoolParam,
+		Required:     false,
+		Default:      fmt.Sprintf("%t", defaultValue),
+		ExampleValue: exampleValue,
 	}
 }
 
@@ -681,6 +740,9 @@ func (b *PluginBuilder) WithArgumentBasedAction(config ArgumentBasedActionConfig
 		cliTitle = config.MenuTitle // Fall back to menu title if no CLI title specified
 	}
 	
+	// Get plugin name for examples
+	pluginName := b.getInfo().Name
+	
 	// Create the smart CLI command
 	smartConfig := SmartCLICommandConfig{
 		Command:             config.CommandName,
@@ -690,7 +752,7 @@ func (b *PluginBuilder) WithArgumentBasedAction(config ArgumentBasedActionConfig
 		UITarget:            fullMenuID, // Use the full prefixed menu ID
 		UITitle:             cliTitle,   // Pass CLI title for Bubble Tea display
 		DirectHandler:       nil, // We'll use DirectExecutor instead
-		DirectExecutor:      convertToDirectExecutor(config.DirectFunction, cliTitle, config.Parameters),
+		DirectExecutor:      convertToDirectExecutor(config.DirectFunction, cliTitle, config.Parameters, pluginName, config.ExampleCommand),
 	}
 	
 	// Add the smart CLI command
@@ -711,10 +773,11 @@ type ArgumentBasedActionConfig struct {
 	Parameters      []ParameterDefinition     // Parameter definitions for validation
 	DirectFunction  InteractiveGoFunction     // Function for direct CLI execution with args
 	ExecuteFunction InteractiveGoFunction     // Function for menu-based execution
+	ExampleCommand  string                    // Custom example command prefix (optional, defaults to plugin name)
 }
 
 // convertToDirectExecutor converts an InteractiveGoFunction to work with DirectExecutor signature
-func convertToDirectExecutor(fn InteractiveGoFunction, cliTitle string, parameters []ParameterDefinition) func(ctx context.Context, outputChan chan<- string, inputChan <-chan string, args []string) error {
+func convertToDirectExecutor(fn InteractiveGoFunction, cliTitle string, parameters []ParameterDefinition, pluginName string, exampleCommand string) func(ctx context.Context, outputChan chan<- string, inputChan <-chan string, args []string) error {
 	return func(ctx context.Context, outputChan chan<- string, inputChan <-chan string, args []string) error {
 		var params map[string]interface{}
 		
@@ -733,7 +796,7 @@ func convertToDirectExecutor(fn InteractiveGoFunction, cliTitle string, paramete
 				outputChan <- generateUsageHelp(cliTitle, parameters)
 				outputChan <- ""
 				outputChan <- "💡 Examples:"
-				outputChan <- generateExamples(cliTitle, parameters)
+				outputChan <- generateExamples(cliTitle, parameters, pluginName, exampleCommand)
 				return nil // Return nil to avoid "unexpected EOF" errors
 			}
 			
@@ -795,12 +858,25 @@ func generateUsageHelp(commandTitle string, parameters []ParameterDefinition) st
 }
 
 // generateExamples creates usage examples from parameter definitions
-func generateExamples(commandTitle string, parameters []ParameterDefinition) string {
+func generateExamples(commandTitle string, parameters []ParameterDefinition, pluginName string, exampleCommand string) string {
 	var examples strings.Builder
 	
-	// Extract command name from title (remove emojis and extra text)
-	commandName := strings.ToLower(strings.Fields(commandTitle)[len(strings.Fields(commandTitle))-1])
-	// Keep the command name as extracted, without hardcoded plugin references
+	// Use custom example command if provided, otherwise extract from title or use plugin name
+	var commandBase string
+	if exampleCommand != "" {
+		commandBase = exampleCommand
+	} else if pluginName != "" {
+		commandBase = fmt.Sprintf("mops plugin %s", pluginName)
+	} else {
+		// Extract command name from title (remove emojis and extra text) as fallback
+		fields := strings.Fields(commandTitle)
+		if len(fields) > 0 {
+			commandName := strings.ToLower(fields[len(fields)-1])
+			commandBase = fmt.Sprintf("mops <plugin> %s", commandName)
+		} else {
+			commandBase = "mops <plugin> <command>"
+		}
+	}
 	
 	// Find required parameters for minimal example
 	var requiredParams []ParameterDefinition
@@ -816,43 +892,59 @@ func generateExamples(commandTitle string, parameters []ParameterDefinition) str
 	
 	// Generate minimal example with required parameters only
 	if len(requiredParams) > 0 {
-		example := fmt.Sprintf("  mops %s", commandName)
+		example := commandBase
 		for _, param := range requiredParams {
-			exampleValue := "value"
-			if len(param.Choices) > 0 {
-				exampleValue = param.Choices[0]
-			} else if param.Name == "profile" {
-				exampleValue = "production"
-			} else if param.Name == "port" {
-				exampleValue = "22"
-			}
+			exampleValue := getParameterExampleValue(param)
 			example += fmt.Sprintf(" --%s %s", param.Name, exampleValue)
 		}
-		examples.WriteString(example + "\n")
+		examples.WriteString("  " + example + "\n")
 	}
 	
 	// Generate full example with optional parameters
 	if len(parameters) > len(requiredParams) {
-		example := fmt.Sprintf("  mops %s", commandName)
+		example := commandBase
 		for _, param := range parameters {
-			exampleValue := "value"
-			if len(param.Choices) > 0 {
-				exampleValue = param.Choices[0]
-			} else if param.Name == "profile" {
-				exampleValue = "staging"
-			} else if param.Name == "server" {
-				exampleValue = "custom.example.com"
-			} else if param.Name == "port" {
-				exampleValue = "2222"
-			} else if param.Name == "user" {
-				exampleValue = "myuser"
-			}
+			exampleValue := getParameterExampleValue(param)
 			example += fmt.Sprintf(" --%s %s", param.Name, exampleValue)
 		}
-		examples.WriteString(example + "\n")
+		examples.WriteString("  " + example + "\n")
 	}
 	
 	return examples.String()
+}
+
+// getParameterExampleValue returns an appropriate example value for a parameter
+func getParameterExampleValue(param ParameterDefinition) string {
+	// Use custom example value if provided by the plugin
+	if param.ExampleValue != "" {
+		return param.ExampleValue
+	}
+	
+	// Use first choice if available
+	if len(param.Choices) > 0 {
+		return param.Choices[0]
+	}
+	
+	// Use default value if available
+	if param.Default != "" {
+		return param.Default
+	}
+	
+	// Generate completely generic examples based only on parameter type
+	switch param.Type {
+	case IntParam:
+		return "42"
+	case PortParam:
+		return "1234"
+	case BoolParam:
+		return "true"
+	case UrlParam:
+		return "https://example.com"
+	case StringParam:
+		return fmt.Sprintf("<%s>", param.Name)
+	default:
+		return fmt.Sprintf("<%s>", param.Name)
+	}
 }
 
 // WithShellCommands adds multiple shell command menu entries
