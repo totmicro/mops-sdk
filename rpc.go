@@ -14,6 +14,28 @@ import (
 	"github.com/hashicorp/go-plugin"
 )
 
+// isPluginUnavailableError checks if the error indicates the plugin is temporarily unavailable
+func isPluginUnavailableError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errStr := err.Error()
+	// Common RPC errors when plugin is unavailable
+	return strings.Contains(errStr, "EOF") ||
+		strings.Contains(errStr, "connection refused") ||
+		strings.Contains(errStr, "broken pipe") ||
+		strings.Contains(errStr, "connection reset by peer") ||
+		strings.Contains(errStr, "use of closed network connection")
+}
+
+// wrapPluginUnavailableError wraps RPC errors with a more user-friendly message
+func wrapPluginUnavailableError(err error, operation string) error {
+	if isPluginUnavailableError(err) {
+		return fmt.Errorf("plugin is temporarily unavailable (may be reloading) - please try again in a few seconds")
+	}
+	return fmt.Errorf("%s: %w", operation, err)
+}
+
 const (
 	PluginName      = "mops-plugin"
 	ProtocolVersion = 1
@@ -47,14 +69,14 @@ func (m *PluginRPCClient) GetInfo() (*PluginInfo, error) {
 	var resp PluginInfoRPC
 	err := m.client.Call("Plugin.GetInfo", new(interface{}), &resp)
 	if err != nil {
-		return nil, err
+		return nil, wrapPluginUnavailableError(err, "failed to get plugin info")
 	}
-	
+
 	info, err := resp.ToPluginInfo()
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return &info, nil
 }
 
@@ -67,7 +89,7 @@ func (g *PluginRPCClient) Initialize(config map[string]any) error {
 	var resp error
 	err = g.client.Call("Plugin.Initialize", string(configJSON), &resp)
 	if err != nil {
-		return err
+		return wrapPluginUnavailableError(err, "failed to initialize plugin")
 	}
 	return resp
 }
@@ -81,7 +103,7 @@ func (g *PluginRPCClient) ReloadConfig(config map[string]any) error {
 	var resp error
 	err = g.client.Call("Plugin.ReloadConfig", string(configJSON), &resp)
 	if err != nil {
-		return err
+		return wrapPluginUnavailableError(err, "failed to reload plugin config")
 	}
 	return resp
 }
@@ -108,7 +130,8 @@ func (g *PluginRPCClient) RegisterInteractiveFunctions() map[string]InteractiveG
 	var resp map[string]string
 	err := g.client.Call("Plugin.RegisterInteractiveFunctions", new(interface{}), &resp)
 	if err != nil {
-		return nil
+		// Return empty map if plugin is unavailable rather than crashing
+		return make(map[string]InteractiveGoFunction)
 	}
 
 	functions := make(map[string]InteractiveGoFunction)
@@ -133,17 +156,17 @@ func (g *PluginRPCClient) callInteractiveFunctionStreaming(ctx context.Context, 
 		FunctionName: name,
 		Params:       params,
 	}
-	
+
 	var initResp InteractiveStreamInitResponse
 	err := g.client.Call("Plugin.InitInteractiveStream", initArgs, &initResp)
 	if err != nil {
-		return fmt.Errorf("failed to initialize interactive stream: %w", err)
+		return wrapPluginUnavailableError(err, "failed to initialize interactive stream. Plugin may be temporarily unavailable")
 	}
-	
+
 	if initResp.Error != nil {
 		return initResp.Error
 	}
-	
+
 	sessionID := initResp.SessionID
 	defer func() {
 		// Clean up the session
@@ -151,15 +174,15 @@ func (g *PluginRPCClient) callInteractiveFunctionStreaming(ctx context.Context, 
 		var cleanupResp InteractiveStreamCleanupResponse
 		g.client.Call("Plugin.CleanupInteractiveStream", cleanupArgs, &cleanupResp)
 	}()
-	
+
 	// Step 2: Start concurrent goroutines for input and output handling
 	errChan := make(chan error, 2)
 	done := make(chan bool, 1)
-	
+
 	// Output polling goroutine
 	go func() {
 		defer func() { done <- true }()
-		
+
 		for {
 			select {
 			case <-ctx.Done():
@@ -169,13 +192,13 @@ func (g *PluginRPCClient) callInteractiveFunctionStreaming(ctx context.Context, 
 				// Poll for output
 				outputArgs := &InteractiveStreamOutputArgs{SessionID: sessionID}
 				var outputResp InteractiveStreamOutputResponse
-				
+
 				err := g.client.Call("Plugin.GetInteractiveStreamOutput", outputArgs, &outputResp)
 				if err != nil {
-					errChan <- fmt.Errorf("failed to get stream output: %w", err)
+					errChan <- wrapPluginUnavailableError(err, "failed to get stream output")
 					return
 				}
-				
+
 				// Send any new output
 				for _, line := range outputResp.NewOutput {
 					select {
@@ -185,7 +208,7 @@ func (g *PluginRPCClient) callInteractiveFunctionStreaming(ctx context.Context, 
 						return
 					}
 				}
-				
+
 				// Check if function completed
 				if outputResp.Completed {
 					if outputResp.Error != nil {
@@ -195,7 +218,7 @@ func (g *PluginRPCClient) callInteractiveFunctionStreaming(ctx context.Context, 
 					}
 					return
 				}
-				
+
 				// Adaptive delay: if we got output, poll immediately for more
 				// If no output, use a small delay to avoid busy polling
 				var delay time.Duration
@@ -204,7 +227,7 @@ func (g *PluginRPCClient) callInteractiveFunctionStreaming(ctx context.Context, 
 				} else {
 					delay = 10 * time.Millisecond // Slower when idle
 				}
-				
+
 				select {
 				case <-ctx.Done():
 					errChan <- ctx.Err()
@@ -215,7 +238,7 @@ func (g *PluginRPCClient) callInteractiveFunctionStreaming(ctx context.Context, 
 			}
 		}
 	}()
-	
+
 	// Input forwarding goroutine
 	go func() {
 		for {
@@ -226,23 +249,26 @@ func (g *PluginRPCClient) callInteractiveFunctionStreaming(ctx context.Context, 
 				if !ok {
 					return
 				}
-				
+
 				// Send input to the plugin
 				inputArgs := &InteractiveStreamInputArgs{
 					SessionID: sessionID,
 					Input:     input,
 				}
 				var inputResp InteractiveStreamInputResponse
-				
+
 				err := g.client.Call("Plugin.SendInteractiveStreamInput", inputArgs, &inputResp)
 				if err != nil {
-					// Log error but don't fail the entire function
+					// Log error but don't fail the entire function unless it's a critical RPC failure
+					if isPluginUnavailableError(err) {
+						return // Plugin is likely unavailable, stop trying to send input
+					}
 					continue
 				}
 			}
 		}
 	}()
-	
+
 	// Wait for completion
 	select {
 	case <-done:
@@ -256,7 +282,7 @@ func (g *PluginRPCClient) GetCLICommands() (map[string]CLICommandHandler, error)
 	var resp map[string]CLICommandInfo
 	err := g.client.Call("Plugin.GetCLICommands", new(interface{}), &resp)
 	if err != nil {
-		return nil, err
+		return nil, wrapPluginUnavailableError(err, "failed to get CLI commands")
 	}
 
 	commands := make(map[string]CLICommandHandler)
@@ -270,7 +296,7 @@ func (g *PluginRPCClient) GetCLICommands() (map[string]CLICommandHandler, error)
 			}
 			err := g.client.Call("Plugin.ExecuteCLICommand", execArgs, &execResp)
 			if err != nil {
-				return err
+				return wrapPluginUnavailableError(err, "failed to execute CLI command")
 			}
 			if execResp.Output != "" {
 				// Output is handled by MOPS host, don't print to avoid UI interference
@@ -336,18 +362,18 @@ func (w *StreamingCommandWrapper) ExecuteStreaming(ctx context.Context, args []s
 		Name: w.name,
 		Args: args,
 	}
-	
+
 	// Call the streaming execution RPC method
 	err := w.client.Call("Plugin.ExecuteStreamingCLICommand", execArgs, &execResp)
 	if err != nil {
 		return err
 	}
-	
+
 	// For now, output the result to the channel
 	if execResp.Output != "" {
 		outputChan <- execResp.Output
 	}
-	
+
 	return execResp.Error
 }
 
@@ -586,7 +612,7 @@ func (s *PluginRPCServer) ExecuteStreamingCLICommand(args *CLICommandExecuteArgs
 	// Create output channel for streaming
 	outputChan := make(chan string, 100)
 	var outputLines []string
-	
+
 	// Collect streaming output
 	done := make(chan error, 1)
 	go func() {
@@ -594,7 +620,7 @@ func (s *PluginRPCServer) ExecuteStreamingCLICommand(args *CLICommandExecuteArgs
 		ctx := context.Background()
 		done <- handler.ExecuteStreaming(ctx, args.Args, outputChan)
 	}()
-	
+
 	// Collect all output lines
 	for {
 		select {
@@ -644,11 +670,11 @@ func setSessionInputState(sessionID string, waitingForInput bool, prompt string)
 	sessionMutex.RLock()
 	session, exists := streamingSessions[sessionID]
 	sessionMutex.RUnlock()
-	
+
 	if !exists {
 		return // Session not found, ignore
 	}
-	
+
 	session.mu.Lock()
 	session.WaitingForInput = waitingForInput
 	session.InputPrompt = prompt
@@ -656,25 +682,25 @@ func setSessionInputState(sessionID string, waitingForInput bool, prompt string)
 }
 
 type InteractiveStreamSession struct {
-	FunctionName   string
-	Params         map[string]interface{}
-	OutputChan     chan string
-	InputChan      chan string
-	ErrorChan      chan error
-	Context        context.Context
-	Cancel         context.CancelFunc
-	OutputBuffer   []string
-	LastSentIndex  int  // Track what has been sent to avoid duplicates
-	Completed      bool
-	FinalError     error
+	FunctionName    string
+	Params          map[string]interface{}
+	OutputChan      chan string
+	InputChan       chan string
+	ErrorChan       chan error
+	Context         context.Context
+	Cancel          context.CancelFunc
+	OutputBuffer    []string
+	LastSentIndex   int // Track what has been sent to avoid duplicates
+	Completed       bool
+	FinalError      error
 	WaitingForInput bool   // Track if function is waiting for input
 	InputPrompt     string // Current input prompt
-	mu             sync.RWMutex
+	mu              sync.RWMutex
 }
 
 func (s *PluginRPCServer) InitInteractiveStream(args *InteractiveStreamInitArgs, resp *InteractiveStreamInitResponse) error {
 	sessionID := fmt.Sprintf("session_%d_%s", time.Now().UnixNano(), args.FunctionName)
-	
+
 	// Get regular interactive functions
 	functions := s.Impl.RegisterInteractiveFunctions()
 	fn, exists := functions[args.FunctionName]
@@ -682,7 +708,7 @@ func (s *PluginRPCServer) InitInteractiveStream(args *InteractiveStreamInitArgs,
 		resp.Error = fmt.Errorf("function %s not found", args.FunctionName)
 		return nil
 	}
-	
+
 	ctx, cancel := context.WithCancel(context.Background())
 	session := &InteractiveStreamSession{
 		FunctionName:    args.FunctionName,
@@ -698,11 +724,11 @@ func (s *PluginRPCServer) InitInteractiveStream(args *InteractiveStreamInitArgs,
 		WaitingForInput: false,
 		InputPrompt:     "",
 	}
-	
+
 	sessionMutex.Lock()
 	streamingSessions[sessionID] = session
 	sessionMutex.Unlock()
-	
+
 	// Start the function in a goroutine
 	go func() {
 		defer func() {
@@ -712,16 +738,16 @@ func (s *PluginRPCServer) InitInteractiveStream(args *InteractiveStreamInitArgs,
 			close(session.InputChan)
 			session.mu.Unlock()
 		}()
-		
+
 		err := fn(session.Context, session.OutputChan, session.InputChan, session.Params)
-		
+
 		session.mu.Lock()
 		session.FinalError = err
 		session.mu.Unlock()
-		
+
 		session.ErrorChan <- err
 	}()
-	
+
 	// Start output collection goroutine
 	go func() {
 		for {
@@ -733,13 +759,13 @@ func (s *PluginRPCServer) InitInteractiveStream(args *InteractiveStreamInitArgs,
 				session.mu.Lock()
 				session.OutputBuffer = append(session.OutputBuffer, line)
 				session.mu.Unlock()
-				
+
 			case <-session.Context.Done():
 				return
 			}
 		}
 	}()
-	
+
 	resp.SessionID = sessionID
 	resp.Error = nil
 	return nil
@@ -749,22 +775,22 @@ func (s *PluginRPCServer) SendInteractiveStreamInput(args *InteractiveStreamInpu
 	sessionMutex.RLock()
 	session, exists := streamingSessions[args.SessionID]
 	sessionMutex.RUnlock()
-	
+
 	if !exists {
 		resp.Error = fmt.Errorf("session %s not found", args.SessionID)
 		return nil
 	}
-	
+
 	session.mu.RLock()
 	completed := session.Completed
 	session.mu.RUnlock()
-	
+
 	if completed {
 		resp.Success = false
 		resp.Error = fmt.Errorf("session %s already completed", args.SessionID)
 		return nil
 	}
-	
+
 	select {
 	case session.InputChan <- args.Input:
 		resp.Success = true
@@ -773,7 +799,7 @@ func (s *PluginRPCServer) SendInteractiveStreamInput(args *InteractiveStreamInpu
 		resp.Success = false
 		resp.Error = fmt.Errorf("timeout sending input to session %s", args.SessionID)
 	}
-	
+
 	return nil
 }
 
@@ -781,15 +807,15 @@ func (s *PluginRPCServer) GetInteractiveStreamOutput(args *InteractiveStreamOutp
 	sessionMutex.RLock()
 	session, exists := streamingSessions[args.SessionID]
 	sessionMutex.RUnlock()
-	
+
 	if !exists {
 		resp.Error = fmt.Errorf("session %s not found", args.SessionID)
 		return nil
 	}
-	
+
 	session.mu.Lock()
 	defer session.mu.Unlock()
-	
+
 	// Get only new output since last call using the LastSentIndex
 	var newOutput []string
 	if session.LastSentIndex < len(session.OutputBuffer) {
@@ -799,16 +825,16 @@ func (s *PluginRPCServer) GetInteractiveStreamOutput(args *InteractiveStreamOutp
 	} else {
 		newOutput = []string{} // No new output
 	}
-	
+
 	completed := session.Completed
 	finalError := session.FinalError
-	
+
 	resp.NewOutput = newOutput
 	resp.Completed = completed
 	resp.Error = finalError
 	resp.NeedsInput = session.WaitingForInput
 	resp.InputPrompt = session.InputPrompt
-	
+
 	return nil
 }
 
@@ -820,12 +846,12 @@ func (s *PluginRPCServer) CleanupInteractiveStream(args *InteractiveStreamCleanu
 		delete(streamingSessions, args.SessionID)
 	}
 	sessionMutex.Unlock()
-	
+
 	resp.Success = exists
 	if !exists {
 		resp.Error = fmt.Errorf("session %s not found", args.SessionID)
 	}
-	
+
 	return nil
 }
 
@@ -936,11 +962,11 @@ type InteractiveStreamOutputArgs struct {
 }
 
 type InteractiveStreamOutputResponse struct {
-	NewOutput     []string
-	Completed     bool
-	Error         error
-	NeedsInput    bool   // Indicates if the function is waiting for user input
-	InputPrompt   string // Optional prompt message for the input
+	NewOutput   []string
+	Completed   bool
+	Error       error
+	NeedsInput  bool   // Indicates if the function is waiting for user input
+	InputPrompt string // Optional prompt message for the input
 }
 
 type InteractiveStreamCleanupArgs struct {
