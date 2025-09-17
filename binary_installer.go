@@ -412,23 +412,71 @@ func (bi *BinaryInstaller) installBinary(binaryPath string, config *BinaryInstal
 	
 	// Handle sudo requirement
 	if config.RequiresSudo {
-		password, err := bi.inputRequester.RequestPassword("Enter sudo password: ")
+		// Use the new sudo checker to intelligently handle sudo
+		sudoChecker := NewSudoChecker()
+		sudoInfo, err := sudoChecker.CheckSudoPrivileges()
 		if err != nil {
-			return fmt.Errorf("failed to get sudo password: %w", err)
+			return fmt.Errorf("failed to check sudo privileges: %w", err)
 		}
 		
-		// Copy with sudo
-		cmd := exec.CommandContext(bi.ctx, "bash", "-c", 
-			fmt.Sprintf("echo '%s' | sudo -S cp '%s' '%s'", password, binaryPath, targetPath))
-		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("failed to copy binary with sudo: %w", err)
+		if !sudoInfo.HasSudo {
+			return fmt.Errorf("sudo is required for installation but not available - please run with sudo")
 		}
 		
-		// Make executable with sudo
-		cmd = exec.CommandContext(bi.ctx, "bash", "-c",
-			fmt.Sprintf("echo '%s' | sudo -S chmod +x '%s'", password, targetPath))
-		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("failed to make binary executable: %w", err)
+		bi.outputChan <- "🔒 Checking system privileges..."
+		
+		if sudoInfo.IsRoot {
+			bi.outputChan <- "✅ Running as root - proceeding with installation"
+			// Copy directly without sudo
+			cmd := exec.CommandContext(bi.ctx, "cp", binaryPath, targetPath)
+			if err := cmd.Run(); err != nil {
+				return fmt.Errorf("failed to copy binary: %w", err)
+			}
+			
+			// Make executable
+			cmd = exec.CommandContext(bi.ctx, "chmod", "+x", targetPath)
+			if err := cmd.Run(); err != nil {
+				return fmt.Errorf("failed to make binary executable: %w", err)
+			}
+		} else if sudoInfo.CanSudoWithoutPwd || sudoInfo.SudoTimeLeft > 0 {
+			if sudoInfo.CanSudoWithoutPwd {
+				bi.outputChan <- "✅ Sudo available (passwordless) - proceeding with installation"
+			} else {
+				bi.outputChan <- fmt.Sprintf("✅ Sudo available (cached for %d minutes) - proceeding with installation", sudoInfo.SudoTimeLeft)
+			}
+			
+			// Copy with sudo (no password needed)
+			cmd := exec.CommandContext(bi.ctx, "sudo", "cp", binaryPath, targetPath)
+			if err := cmd.Run(); err != nil {
+				return fmt.Errorf("failed to copy binary with sudo: %w", err)
+			}
+			
+			// Make executable with sudo
+			cmd = exec.CommandContext(bi.ctx, "sudo", "chmod", "+x", targetPath)
+			if err := cmd.Run(); err != nil {
+				return fmt.Errorf("failed to make binary executable with sudo: %w", err)
+			}
+		} else {
+			// Need to prompt for password
+			bi.outputChan <- "⚠️  Sudo password required for installation"
+			password, err := bi.inputRequester.RequestPassword("Enter sudo password: ")
+			if err != nil {
+				return fmt.Errorf("failed to get sudo password: %w", err)
+			}
+			
+			// Copy with sudo and password
+			cmd := exec.CommandContext(bi.ctx, "bash", "-c", 
+				fmt.Sprintf("echo '%s' | sudo -S cp '%s' '%s'", password, binaryPath, targetPath))
+			if err := cmd.Run(); err != nil {
+				return fmt.Errorf("failed to copy binary with sudo: %w", err)
+			}
+			
+			// Make executable with sudo
+			cmd = exec.CommandContext(bi.ctx, "bash", "-c",
+				fmt.Sprintf("echo '%s' | sudo -S chmod +x '%s'", password, targetPath))
+			if err := cmd.Run(); err != nil {
+				return fmt.Errorf("failed to make binary executable with sudo: %w", err)
+			}
 		}
 	} else {
 		// Direct copy (no sudo)
