@@ -75,6 +75,10 @@ type Menu struct {
 	Provider      string          `yaml:"provider,omitempty"`
 	ProviderParam string          `yaml:"provider_param,omitempty"`
 	Map           map[string]Menu `yaml:"-"`
+	// Checkbox functionality
+	IsCheckboxMenu bool        `yaml:"is_checkbox_menu,omitempty"` // Marks this menu as supporting checkboxes
+	ExecuteAction  *MenuAction `yaml:"execute_action,omitempty"`   // Action to run with selected checkboxes
+	ExecuteKey     string      `yaml:"execute_key,omitempty"`      // Key to trigger execute action (defaults to 'e')
 }
 
 // MenuEntry represents a menu entry
@@ -92,6 +96,10 @@ type MenuEntry struct {
 	IsDynamic     bool                   `yaml:"-"`
 	KeyBind       string                 `yaml:"key_bind,omitempty"`
 	IsInteractive bool                   `yaml:"is_interactive,omitempty"`
+	// Checkbox functionality
+	IsCheckbox    bool   `yaml:"is_checkbox,omitempty"`    // Marks this entry as a checkbox
+	IsChecked     bool   `yaml:"-"`                        // Runtime state - not persisted in YAML
+	CheckboxGroup string `yaml:"checkbox_group,omitempty"` // Group name for related checkboxes
 }
 
 // MenuAction represents a menu action

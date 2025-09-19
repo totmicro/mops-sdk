@@ -985,3 +985,65 @@ type ShellCommandEntry struct {
 	Description string // Description/message for the entry
 	Command     string // Shell command to execute
 }
+
+// CheckboxItem represents an item in a checkbox menu
+type CheckboxItem struct {
+	Key         string                 // Item key/identifier
+	Label       string                 // Item display label  
+	Description string                 // Item description
+	Params      map[string]interface{} // Parameters to pass when selected
+	IsChecked   bool                   // Initial checked state
+}
+
+// WithCheckboxMenu creates a menu with checkbox entries that can be toggled and executed in batch
+func (b *PluginBuilder) WithCheckboxMenu(menuID, title string, items []CheckboxItem, executeFunction InteractiveGoFunction, executeKey string) *PluginBuilder {
+	if executeKey == "" {
+		executeKey = "e" // Default execute key
+	}
+	
+	// Register the execute function with proper naming
+	executeFunctionName := b.getStandardName(fmt.Sprintf("%s_execute", menuID))
+	b.WithInteractiveFunction(executeFunctionName, executeFunction)
+	
+	// Create the checkbox menu provider
+	return b.WithMenuProvider(menuID, menuID, title, func(param string) ([]MenuEntry, error) {
+		var entries []MenuEntry
+		
+		// Add checkbox entries - use standard actions that MOPS core understands
+		for i, item := range items {
+			entries = append(entries, MenuEntry{
+				Key:         fmt.Sprintf("%d", i+1),
+				Label:       item.Label,
+				Message:     item.Description,
+				Action:      "noop", // Use noop action - checkbox behavior is handled by IsCheckbox flag
+				Params:      item.Params,
+				IsCheckbox:  true,
+				IsChecked:   item.IsChecked,
+			})
+		}
+		
+		// Add execute entry
+		entries = append(entries, MenuEntry{
+			Key:     executeKey,
+			Label:   fmt.Sprintf("▶ Execute Selected (%s)", strings.ToUpper(executeKey)),
+			Message: "Execute action with selected items",
+			Action:  "core_interactive-go",
+			Command: executeFunctionName,
+		})
+		
+		return entries, nil
+	})
+}
+
+// WithCheckboxMenuSimple creates a simple checkbox menu with string items
+func (b *PluginBuilder) WithCheckboxMenuSimple(menuID, title string, itemLabels []string, executeFunction InteractiveGoFunction) *PluginBuilder {
+	var items []CheckboxItem
+	for i, label := range itemLabels {
+		items = append(items, CheckboxItem{
+			Key:    fmt.Sprintf("item_%d", i+1),
+			Label:  label,
+			Params: map[string]interface{}{"item": label, "index": i},
+		})
+	}
+	return b.WithCheckboxMenu(menuID, title, items, executeFunction, "f")
+}
