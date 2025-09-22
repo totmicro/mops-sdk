@@ -139,3 +139,38 @@ func (s *InteractiveSharedStorage) ListVars() ([]string, error) {
 		return nil, fmt.Errorf("context cancelled while waiting for shared storage response")
 	}
 }
+
+// Environment Variable specific methods with MOPS_ENV_ prefix
+
+const EnvVarPrefix = "MOPS_ENV_"
+
+// SetEnvVar sets an environment variable in shared storage with MOPS_ENV_ prefix
+func (s *InteractiveSharedStorage) SetEnvVar(key, value string) error {
+	prefixedKey := EnvVarPrefix + key
+	return s.SetVar(prefixedKey, value)
+}
+
+// GetEnvVar gets an environment variable from shared storage, removing MOPS_ENV_ prefix
+func (s *InteractiveSharedStorage) GetEnvVar(key string) (string, error) {
+	prefixedKey := EnvVarPrefix + key
+	return s.GetVar(prefixedKey)
+}
+
+// ListEnvVars lists all environment variables (keys with MOPS_ENV_ prefix), returning keys without prefix
+func (s *InteractiveSharedStorage) ListEnvVars() ([]string, error) {
+	allKeys, err := s.ListVars()
+	if err != nil {
+		return nil, err
+	}
+	
+	var envKeys []string
+	for _, key := range allKeys {
+		if strings.HasPrefix(key, EnvVarPrefix) {
+			// Remove the prefix and add to environment variables list
+			envKey := strings.TrimPrefix(key, EnvVarPrefix)
+			envKeys = append(envKeys, envKey)
+		}
+	}
+	
+	return envKeys, nil
+}
