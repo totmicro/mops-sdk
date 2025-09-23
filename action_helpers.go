@@ -1047,3 +1047,196 @@ func (b *PluginBuilder) WithCheckboxMenuSimple(menuID, title string, itemLabels 
 	}
 	return b.WithCheckboxMenu(menuID, title, items, executeFunction, "f")
 }
+
+// FavoritesConfig represents configuration for favorites functionality
+type FavoritesConfig struct {
+	MenuID     string         // Menu ID for the favorites
+	Title      string         // Menu title
+	Items      []FavoriteItem // Items that can be favorited
+	PluginName string         // Plugin name for config storage
+	SummaryKey string         // Key for summary menu entry (optional)
+}
+
+// FavoriteItem represents an item that can be marked as favorite
+type FavoriteItem struct {
+	Key    string                 // Unique key for the item
+	Label  string                 // Display label
+	Params map[string]interface{} // Additional parameters
+}
+
+// WithFavoritesMenu adds a favorites toggle menu to the plugin
+// This creates a menu where users can toggle items as favorites, with persistence
+func (b *PluginBuilder) WithFavoritesMenu(config FavoritesConfig) *PluginBuilder {
+	// Create a menu provider that generates the favorites menu
+	b.base.WithSimpleProvider(config.MenuID, func(param string) ([]MenuEntry, error) {
+		var entries []MenuEntry
+		
+		// Generate menu entries - favorites state will be read from config during rendering
+		for i, item := range config.Items {
+			// Create checkbox-style entry for favorites toggle
+			entries = append(entries, MenuEntry{
+				Key:       fmt.Sprintf("%d", i+1),
+				Label:     item.Label, // Let checkbox system handle the icons
+				Message:   fmt.Sprintf("Toggle favorite status for %s", item.Label),
+				Action:    "noop", // Use noop action for checkbox behavior
+				Params:    mergeMaps(item.Params, map[string]interface{}{
+					"item":               item.Key,
+					"item_label":         item.Label,
+					"is_favorite_toggle": true, // Special flag to identify this as a favorite
+					"plugin_name":        config.PluginName,
+				}),
+				IsCheckbox: true,
+				IsChecked:  false, // Initial state will be read from config during rendering
+			})
+		}
+
+		// Add summary entry if key is provided
+		if config.SummaryKey != "" {
+			entries = append(entries, MenuEntry{
+				Key:     config.SummaryKey,
+				Label:   "📊 Favorites Summary",
+				Action:  "core_interactive-go",
+				Command: fmt.Sprintf("%s_favorites-summary", config.PluginName),
+				Message: "Show favorites summary",
+			})
+		}
+
+		return entries, nil
+	})
+	
+	return b
+}
+
+// Helper function to merge maps
+func mergeMaps(map1, map2 map[string]interface{}) map[string]interface{} {
+	result := make(map[string]interface{})
+	for k, v := range map1 {
+		result[k] = v
+	}
+	for k, v := range map2 {
+		result[k] = v
+	}
+	return result
+}
+
+// FavoritesHelper provides common functionality for working with favorites across plugins
+// Example usage:
+//   var favoritesHelper = sdk.NewFavoritesHelper("my-plugin", map[string]string{
+//       "item1": "Item One",
+//       "item2": "Item Two",
+//   })
+//   
+//   // Use in plugin builder:
+//   .AddInteractive(sdk.StreamingAction("favorites-summary", "Favorites summary", 
+//       "my-plugin_favorites-summary", favoritesHelper.CreateFavoritesSummaryFunction(getCurrentPluginConfig)))
+type FavoritesHelper struct {
+	pluginName string
+	items      map[string]string // key -> label mapping
+}
+
+// NewFavoritesHelper creates a new favorites helper
+func NewFavoritesHelper(pluginName string, items map[string]string) *FavoritesHelper {
+	return &FavoritesHelper{
+		pluginName: pluginName,
+		items:      items,
+	}
+}
+
+// GetCurrentFavorites reads the current favorites from plugin config
+func (f *FavoritesHelper) GetCurrentFavorites(pluginConfig map[string]interface{}) []string {
+	if pluginConfig == nil {
+		return []string{}
+	}
+	
+	// Read favorites from config
+	if favorites, exists := pluginConfig["favorites"]; exists {
+		switch favs := favorites.(type) {
+		case []interface{}:
+			// Convert []interface{} to []string
+			var result []string
+			for _, fav := range favs {
+				if favStr, ok := fav.(string); ok {
+					result = append(result, favStr)
+				}
+			}
+			return result
+		case []string:
+			return favs
+		}
+	}
+	
+	return []string{}
+}
+
+// GetFavorites returns items that are currently favorites
+func (f *FavoritesHelper) GetFavorites(pluginConfig map[string]interface{}) map[string]string {
+	currentFavorites := f.GetCurrentFavorites(pluginConfig)
+	favorites := make(map[string]string)
+	
+	for _, favKey := range currentFavorites {
+		if label, exists := f.items[favKey]; exists {
+			favorites[favKey] = label
+		}
+	}
+	
+	return favorites
+}
+
+// GetNonFavorites returns items that are not currently favorites
+func (f *FavoritesHelper) GetNonFavorites(pluginConfig map[string]interface{}) map[string]string {
+	currentFavorites := f.GetCurrentFavorites(pluginConfig)
+	favoritesSet := make(map[string]bool)
+	for _, fav := range currentFavorites {
+		favoritesSet[fav] = true
+	}
+	
+	nonFavorites := make(map[string]string)
+	for key, label := range f.items {
+		if !favoritesSet[key] {
+			nonFavorites[key] = label
+		}
+	}
+	
+	return nonFavorites
+}
+
+// DisplayFavoritesSummary creates a favorites summary function that can be used as an interactive function
+func (f *FavoritesHelper) DisplayFavoritesSummary(pluginConfig map[string]interface{}, outputChan chan<- string) {
+	outputChan <- "📊 Favorites Summary"
+	outputChan <- "===================="
+	outputChan <- ""
+
+	favorites := f.GetFavorites(pluginConfig)
+	nonFavorites := f.GetNonFavorites(pluginConfig)
+	
+	// Show favorites
+	if len(favorites) > 0 {
+		outputChan <- "⭐ Current Favorites:"
+		for key, label := range favorites {
+			outputChan <- fmt.Sprintf("   • %s (%s)", label, key)
+		}
+	} else {
+		outputChan <- "⭐ Current Favorites: None"
+	}
+	
+	outputChan <- ""
+	
+	// Show non-favorites
+	if len(nonFavorites) > 0 {
+		outputChan <- "☆ Non-Favorites:"
+		for key, label := range nonFavorites {
+			outputChan <- fmt.Sprintf("   • %s (%s)", label, key)
+		}
+	} else {
+		outputChan <- "☆ Non-Favorites: None (all items are favorites!)"
+	}
+}
+
+// CreateFavoritesSummaryFunction creates a ready-to-use interactive function for displaying favorites summary
+func (f *FavoritesHelper) CreateFavoritesSummaryFunction(getPluginConfig func() map[string]interface{}) InteractiveGoFunction {
+	return func(ctx context.Context, outputChan chan<- string, inputChan <-chan string, params map[string]interface{}) error {
+		pluginConfig := getPluginConfig()
+		f.DisplayFavoritesSummary(pluginConfig, outputChan)
+		return nil
+	}
+}
