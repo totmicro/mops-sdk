@@ -129,34 +129,7 @@ func TestBuilderWithSimpleProvider(t *testing.T) {
 	}
 }
 
-func TestBuilderWithSimpleExecutor(t *testing.T) {
-	executorFunc := func(entry MenuEntry, input string) ActionResult {
-		return ActionResult{
-			Success: true,
-			Output:  "Test output",
-		}
-	}
 
-	builder := NewPluginBuilder("test", "1.0.0", "test").
-		WithSimpleExecutor("test-action", executorFunc)
-
-	if len(builder.base.executors) != 1 {
-		t.Errorf("Expected 1 executor, got %d", len(builder.base.executors))
-	}
-
-	executor := builder.base.executors[0]
-	if executor.GetActionType() != "test-action" {
-		t.Errorf("Expected action type 'test-action', got '%s'", executor.GetActionType())
-	}
-
-	result := executor.Execute(MenuEntry{}, "test input")
-	if !result.Success {
-		t.Error("Expected executor to succeed")
-	}
-	if result.Output != "Test output" {
-		t.Errorf("Expected output 'Test output', got '%s'", result.Output)
-	}
-}
 
 func TestBuilderWithInteractiveFunction(t *testing.T) {
 	interactiveFunc := func(ctx context.Context, outputChan chan<- string, inputChan <-chan string, params map[string]interface{}) error {

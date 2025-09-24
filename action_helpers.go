@@ -3,7 +3,7 @@ package sdk
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -396,10 +396,8 @@ func (b *PluginBuilder) WithAutoConfigPresets() *PluginBuilder {
 	for presetName, preset := range info.ConfigPresets {
 		// Start with global config as base
 		mergedConfig := make(map[string]interface{})
-		if globalConfig != nil {
-			for key, value := range globalConfig {
-				mergedConfig[key] = value
-			}
+		for key, value := range globalConfig {
+			mergedConfig[key] = value
 		}
 		
 		// Merge preset-specific config (overwrites global values)
@@ -521,7 +519,7 @@ func (b *PluginBuilder) WithPluginFromYAML() *PluginBuilder {
 	var err error
 	
 	for _, path := range searchPaths {
-		yamlData, err = ioutil.ReadFile(path)
+		yamlData, err = os.ReadFile(path)
 		if err == nil {
 			break
 		}
@@ -880,13 +878,10 @@ func generateExamples(commandTitle string, parameters []ParameterDefinition, plu
 	
 	// Find required parameters for minimal example
 	var requiredParams []ParameterDefinition
-	var optionalParams []ParameterDefinition
 	
 	for _, param := range parameters {
 		if param.Required {
 			requiredParams = append(requiredParams, param)
-		} else {
-			optionalParams = append(optionalParams, param)
 		}
 	}
 	

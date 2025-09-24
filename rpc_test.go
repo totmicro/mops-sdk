@@ -80,30 +80,7 @@ func TestPluginRPCServer_RegisterProviders(t *testing.T) {
 	}
 }
 
-func TestPluginRPCServer_RegisterExecutors(t *testing.T) {
-	mockExecutor := &MockExecutor{
-		actionType: "test-action",
-	}
 
-	mockPlugin := &MockPluginImpl{
-		executors: []ActionExecutor{mockExecutor},
-	}
-
-	server := &PluginRPCServer{Impl: mockPlugin}
-
-	var resp []ActionExecutorRPC
-	err := server.RegisterExecutors(nil, &resp)
-
-	if err != nil {
-		t.Errorf("RegisterExecutors should not return error: %v", err)
-	}
-	if len(resp) != 1 {
-		t.Errorf("Expected 1 executor, got %d", len(resp))
-	}
-	if resp[0].ActionType != "test-action" {
-		t.Errorf("Expected action type 'test-action', got '%s'", resp[0].ActionType)
-	}
-}
 
 func TestPluginRPCServer_RegisterInteractiveFunctions(t *testing.T) {
 	testFunc := func(ctx context.Context, outputChan chan<- string, inputChan <-chan string, params map[string]interface{}) error {
@@ -219,7 +196,6 @@ func TestPluginRPCServer_Cleanup(t *testing.T) {
 type MockPluginImpl struct {
 	info                 PluginInfo
 	providers            []DynamicProvider
-	executors            []ActionExecutor
 	interactiveFunctions map[string]InteractiveGoFunction
 	cliCommands          map[string]CLICommandHandler
 	menuEntries          map[string][]MenuEntry
@@ -235,6 +211,10 @@ func (m *MockPluginImpl) Initialize(config map[string]any) error {
 	return m.initError
 }
 
+func (m *MockPluginImpl) ReloadConfig(config map[string]any) error {
+	return nil
+}
+
 func (m *MockPluginImpl) RegisterProviders() []DynamicProvider {
 	if m.providers == nil {
 		return []DynamicProvider{}
@@ -242,12 +222,7 @@ func (m *MockPluginImpl) RegisterProviders() []DynamicProvider {
 	return m.providers
 }
 
-func (m *MockPluginImpl) RegisterExecutors() []ActionExecutor {
-	if m.executors == nil {
-		return []ActionExecutor{}
-	}
-	return m.executors
-}
+
 
 func (m *MockPluginImpl) RegisterInteractiveFunctions() map[string]InteractiveGoFunction {
 	if m.interactiveFunctions == nil {
@@ -261,6 +236,10 @@ func (m *MockPluginImpl) GetCLICommands() (map[string]CLICommandHandler, error) 
 		return make(map[string]CLICommandHandler), nil
 	}
 	return m.cliCommands, nil
+}
+
+func (m *MockPluginImpl) GetStreamingCLICommands() (map[string]StreamingCLICommandHandler, error) {
+	return make(map[string]StreamingCLICommandHandler), nil
 }
 
 func (m *MockPluginImpl) GetMenuEntries() (map[string][]MenuEntry, error) {
@@ -310,17 +289,4 @@ func TestProviderRPCConversion(t *testing.T) {
 	}
 }
 
-func TestExecutorRPCConversion(t *testing.T) {
-	executor := &MockExecutor{
-		actionType: "test-action",
-	}
 
-	// Test converting to RPC format
-	rpcExecutor := ActionExecutorRPC{
-		ActionType: executor.GetActionType(),
-	}
-
-	if rpcExecutor.ActionType != "test-action" {
-		t.Errorf("Expected RPC executor action type 'test-action', got '%s'", rpcExecutor.ActionType)
-	}
-}

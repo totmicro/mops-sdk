@@ -74,10 +74,8 @@ func NewPluginBuilderFromMetadata(metadata *PluginMetadata) *PluginBuilder {
 		
 		// Start with global config as base
 		mergedConfig := make(map[string]interface{})
-		if globalConfig != nil {
-			for key, value := range globalConfig {
-				mergedConfig[key] = value
-			}
+		for key, value := range globalConfig {
+			mergedConfig[key] = value
 		}
 		
 		// Merge preset-specific config (overwrites global values)
@@ -96,34 +94,31 @@ func NewPluginBuilderFromMetadata(metadata *PluginMetadata) *PluginBuilder {
 
 	// Set default config if available and no default preset was found
 	hasDefaultPreset := false
-	hasDefaultConfig := false
+	hasOtherPresets := false
 	
-	// Check if default preset exists
+	// Check if default preset exists and if there are other presets besides global
 	for presetName := range metadata.ConfigPresets {
 		if presetName == "default" {
 			hasDefaultPreset = true
-			break
+		} else if presetName != "global" {
+			hasOtherPresets = true
 		}
 	}
 	
 	// Set default config if available and no default preset was found
 	if metadata.DefaultConfig != nil && !hasDefaultPreset {
 		builder.SetDefaultConfig(metadata.DefaultConfig)
-		hasDefaultConfig = true
 	}
 	
-	// If no DefaultConfig and no default preset, try to use global preset as fallback
-	if !hasDefaultConfig && !hasDefaultPreset {
+	// If no DefaultConfig and no default preset, use global preset as fallback
+	// only if there are other presets (not just global alone)
+	if metadata.DefaultConfig == nil && !hasDefaultPreset && hasOtherPresets {
 		if globalPreset, exists := metadata.ConfigPresets["global"]; exists {
-			// Use the global preset's merged config (already processed above)
-			// We need to recreate the merged config here
+			// Use the global preset config as default
 			globalConfig := make(map[string]any)
-			
-			// Merge preset-specific config
 			for key, value := range globalPreset.Config {
 				globalConfig[key] = value
 			}
-			
 			builder.SetDefaultConfig(globalConfig)
 		}
 	}

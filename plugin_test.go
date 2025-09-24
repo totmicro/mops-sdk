@@ -180,7 +180,10 @@ func TestRepositoryPlugin(t *testing.T) {
 		},
 		Platforms: map[string]RepositoryPluginAsset{
 			"linux-amd64": {
-				Platform: PlatformInfo{
+				Platform: struct {
+					OS   string `json:"os"`
+					Arch string `json:"arch"`
+				}{
 					OS:   "linux",
 					Arch: "amd64",
 				},

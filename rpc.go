@@ -665,21 +665,6 @@ var (
 	sessionMutex      sync.RWMutex
 )
 
-// setSessionInputState updates the input state for a session
-func setSessionInputState(sessionID string, waitingForInput bool, prompt string) {
-	sessionMutex.RLock()
-	session, exists := streamingSessions[sessionID]
-	sessionMutex.RUnlock()
-
-	if !exists {
-		return // Session not found, ignore
-	}
-
-	session.mu.Lock()
-	session.WaitingForInput = waitingForInput
-	session.InputPrompt = prompt
-	session.mu.Unlock()
-}
 
 type InteractiveStreamSession struct {
 	FunctionName    string

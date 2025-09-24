@@ -33,9 +33,6 @@ func TestNewPluginBase(t *testing.T) {
 	if base.providers == nil {
 		t.Error("Expected providers to be initialized")
 	}
-	if base.executors == nil {
-		t.Error("Expected executors to be initialized")
-	}
 	if base.interactiveFunctions == nil {
 		t.Error("Expected interactiveFunctions to be initialized")
 	}
@@ -50,9 +47,7 @@ func TestNewPluginBase(t *testing.T) {
 	if len(base.providers) != 0 {
 		t.Errorf("Expected 0 providers initially, got %d", len(base.providers))
 	}
-	if len(base.executors) != 0 {
-		t.Errorf("Expected 0 executors initially, got %d", len(base.executors))
-	}
+
 	if len(base.interactiveFunctions) != 0 {
 		t.Errorf("Expected 0 interactive functions initially, got %d", len(base.interactiveFunctions))
 	}
@@ -117,28 +112,7 @@ func TestPluginBaseRegisterProviders(t *testing.T) {
 	}
 }
 
-func TestPluginBaseRegisterExecutors(t *testing.T) {
-	info := PluginInfo{Name: "test", Version: "1.0.0"}
-	base := NewPluginBase(info)
 
-	// Initially empty
-	executors := base.RegisterExecutors()
-	if len(executors) != 0 {
-		t.Errorf("Expected 0 executors initially, got %d", len(executors))
-	}
-
-	// Add an executor
-	mockExecutor := &MockExecutor{actionType: "test-action"}
-	base.AddExecutor(mockExecutor)
-
-	executors = base.RegisterExecutors()
-	if len(executors) != 1 {
-		t.Errorf("Expected 1 executor after adding, got %d", len(executors))
-	}
-	if executors[0].GetActionType() != "test-action" {
-		t.Errorf("Expected action type 'test-action', got '%s'", executors[0].GetActionType())
-	}
-}
 
 func TestPluginBaseRegisterInteractiveFunctions(t *testing.T) {
 	info := PluginInfo{Name: "test", Version: "1.0.0"}

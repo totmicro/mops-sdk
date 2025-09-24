@@ -154,7 +154,7 @@ func (ti *ToolInstaller) CheckToolStatus(config *ToolInstallConfig) (*ToolInstal
 func (ti *ToolInstaller) InstallTool(config *ToolInstallConfig) (*ToolInstallResult, error) {
 	currentPlatform := ti.GetCurrentPlatform()
 
-	ti.outputChan <- fmt.Sprintf("🔧 %s Installation", strings.Title(config.ToolName))
+	ti.outputChan <- fmt.Sprintf("🔧 %s Installation", strings.ToUpper(config.ToolName[:1])+config.ToolName[1:])
 	ti.outputChan <- strings.Repeat("=", len(config.ToolName)+14)
 	ti.outputChan <- ""
 
@@ -244,7 +244,7 @@ func (ti *ToolInstaller) InstallTool(config *ToolInstallConfig) (*ToolInstallRes
 	}
 
 	ti.outputChan <- ""
-	ti.outputChan <- fmt.Sprintf("🎉 %s installation completed successfully!", strings.Title(config.ToolName))
+	ti.outputChan <- fmt.Sprintf("🎉 %s installation completed successfully!", strings.ToUpper(config.ToolName[:1])+config.ToolName[1:])
 
 	return &ToolInstallResult{
 		Success:  true,

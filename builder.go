@@ -22,7 +22,7 @@ func NewPluginBuilder(name, version, description string) *PluginBuilder {
 		Tags:           []string{},
 		Dependencies:   []string{},
 		CLICommands:    []CLICommandInfo{},
-		DefaultConfig:  make(map[string]any),
+		DefaultConfig:  nil, // Initialize as nil, will be set when needed
 		ConfigPresets:  make(map[string]ConfigPreset),
 		Platform:       GetCurrentPlatform(),
 		SupportedPlatforms: []PlatformInfo{
