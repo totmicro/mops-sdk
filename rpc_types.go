@@ -3,7 +3,6 @@ package sdk
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 )
 
 // PluginInfoRPC is a GOB-safe version of PluginInfo for RPC transport
@@ -47,20 +46,6 @@ func (rpc *PluginInfoRPC) ToPluginInfo() (PluginInfo, error) {
 		MenuIntegration:    rpc.MenuIntegration,
 	}
 	
-	// Debug log CLI commands being converted from RPC
-	debugMsg := fmt.Sprintf("[SDK-RPC-BACK] Converting %d CLI commands from RPC:\n", len(rpc.CLICommands))
-	for _, cmd := range rpc.CLICommands {
-		debugMsg += fmt.Sprintf("  - %s: Hidden=%v\n", cmd.Name, cmd.Hidden)
-	}
-	debugMsg += "\n"
-	
-	// Append to existing log file
-	file, _ := os.OpenFile("/tmp/mops-debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if file != nil {
-		file.WriteString(debugMsg)
-		file.Close()
-	}
-
 	// Decode JSON config
 	if rpc.DefaultConfigJSON != "" {
 		if err := json.Unmarshal([]byte(rpc.DefaultConfigJSON), &info.DefaultConfig); err != nil {
@@ -102,20 +87,6 @@ func NewPluginInfoRPC(info PluginInfo) (PluginInfoRPC, error) {
 		MenuIntegration:    info.MenuIntegration,
 	}
 	
-	// Debug log CLI commands being converted for RPC
-	debugMsg := fmt.Sprintf("[SDK-RPC] Converting %d CLI commands for RPC:\n", len(info.CLICommands))
-	for _, cmd := range info.CLICommands {
-		debugMsg += fmt.Sprintf("  - %s: Hidden=%v\n", cmd.Name, cmd.Hidden)
-	}
-	debugMsg += "\n"
-	
-	// Append to existing log file
-	file, _ := os.OpenFile("/tmp/mops-debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if file != nil {
-		file.WriteString(debugMsg)
-		file.Close()
-	}
-
 	// Encode config as JSON
 	if info.DefaultConfig != nil {
 		configJSON, err := json.Marshal(info.DefaultConfig)

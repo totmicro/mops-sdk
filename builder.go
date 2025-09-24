@@ -2,7 +2,6 @@ package sdk
 
 import (
 	"fmt"
-	"os"
 	
 	"github.com/hashicorp/go-plugin"
 )
@@ -125,10 +124,6 @@ func (b *PluginBuilder) WithCLICommandOptions(name, description string, handler 
 		Description: description,
 		Hidden:      hidden,
 	}
-	
-	// Debug log to file
-	debugMsg := fmt.Sprintf("[SDK-BUILDER] Command: %s, Hidden: %v, Struct: %+v\n", name, hidden, cmdInfo)
-	os.WriteFile("/tmp/mops-debug.log", []byte(debugMsg), 0644)
 	
 	b.getInfo().CLICommands = append(b.getInfo().CLICommands, cmdInfo)
 	b.base.WithCLICommand(name, handler)
