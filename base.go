@@ -1,7 +1,6 @@
 package sdk
 
 import (
-	"context"
 	"fmt"
 	"strings"
 )
@@ -306,9 +305,4 @@ func (p *PluginBase) WithStreamingCLICommand(name string, handler StreamingCLICo
 func (p *PluginBase) WithMenuEntry(menuID string, entry MenuEntry) *PluginBase {
 	p.AddMenuEntry(menuID, entry)
 	return p
-}
-
-// CreateBinaryInstaller creates a new binary installer instance with the provided channels
-func (p *PluginBase) CreateBinaryInstaller(ctx context.Context, outputChan chan<- string, inputChan <-chan string) BinaryInstallerInterface {
-	return NewBinaryInstaller(ctx, outputChan, inputChan)
 }

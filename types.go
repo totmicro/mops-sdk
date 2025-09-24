@@ -3,8 +3,18 @@ package sdk
 
 import (
 	"context"
-	"time"
 )
+
+// PlatformInfo contains platform-specific information
+type PlatformInfo struct {
+	OS         string // "linux", "darwin", "windows"
+	Arch       string // "amd64", "arm64"
+	Platform   string // "linux-amd64", "darwin-arm64", etc.
+	BinaryExt  string // ".exe" on Windows, "" on Unix
+	ArchiveExt string // Expected archive extension: ".tar.gz", ".zip"
+	InstallDir string // Default installation directory
+	InPath     bool   // Whether install directory is in PATH
+}
 
 // ActionResult represents the result of executing an action
 type ActionResult struct {
@@ -111,14 +121,14 @@ type MenuAction struct {
 	Params  map[string]interface{} `yaml:"params,omitempty"`
 }
 
-// BinaryInstallerInterface provides methods for cross-platform binary installation
-type BinaryInstallerInterface interface {
-	// InstallBinary performs cross-platform binary installation
-	InstallBinary(config *BinaryInstallConfig) error
-	// CheckBinaryInstalled checks if a binary is installed and returns version info
-	CheckBinaryInstalled(binaryName string) (bool, string, error)
-	// GetPlatformInfo returns information about the current platform
-	GetPlatformInfo() *PlatformInfo
-	// SetDownloadTimeout sets the timeout for download operations
-	SetDownloadTimeout(timeout time.Duration)
+// ToolInstallerInterface provides methods for cross-platform tool installation with custom commands
+type ToolInstallerInterface interface {
+	// InstallTool performs cross-platform tool installation using custom commands
+	InstallTool(config *ToolInstallConfig) (*ToolInstallResult, error)
+	// CheckToolStatus checks if a tool is installed and gets version information
+	CheckToolStatus(config *ToolInstallConfig) (*ToolInstallResult, error)
+	// GetCurrentPlatform returns the current platform string in "os-arch" format
+	GetCurrentPlatform() string
+	// GetSupportedPlatforms returns a list of commonly supported platforms
+	GetSupportedPlatforms() []string
 }
