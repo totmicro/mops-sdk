@@ -44,6 +44,8 @@ type ToolInstallConfig struct {
 	ToolName string `yaml:"tool_name"`
 	// Default version to install (optional, can be used by commands)
 	Version string `yaml:"version,omitempty"`
+	// Force update even if tool is already installed
+	ForceUpdate bool `yaml:"force_update,omitempty"`
 	// Platform-specific installation commands
 	// Keys should be in format: "os-arch" (e.g., "linux-amd64", "darwin-arm64", "windows-amd64")
 	InstallCommands map[string]ToolInstallCommand `yaml:"install_commands"`
@@ -185,7 +187,7 @@ func (ti *ToolInstaller) InstallTool(config *ToolInstallConfig) (*ToolInstallRes
 	// Check current status
 	ti.outputChan <- "🔍 Checking current installation status..."
 	status, err := ti.CheckToolStatus(config)
-	if err == nil && status.Success && status.AlreadyInstalled {
+	if err == nil && status.Success && status.AlreadyInstalled && !config.ForceUpdate {
 		ti.outputChan <- fmt.Sprintf("✅ %s is already installed", config.ToolName)
 		if status.VersionRetrievable && status.Version != "" {
 			ti.outputChan <- fmt.Sprintf("📦 Current version: %s", status.Version)
@@ -205,7 +207,12 @@ func (ti *ToolInstaller) InstallTool(config *ToolInstallConfig) (*ToolInstallRes
 		return status, nil
 	}
 
-	if err == nil {
+	if config.ForceUpdate && err == nil && status.Success && status.AlreadyInstalled {
+		ti.outputChan <- fmt.Sprintf("🔄 %s is already installed, but forcing update as requested", config.ToolName)
+		if status.VersionRetrievable && status.Version != "" {
+			ti.outputChan <- fmt.Sprintf("📦 Current version: %s", status.Version)
+		}
+	} else if err == nil && (!status.Success || !status.AlreadyInstalled) {
 		ti.outputChan <- fmt.Sprintf("📦 %s not found, proceeding with installation...", config.ToolName)
 	} else {
 		ti.outputChan <- fmt.Sprintf("⚠️  Could not check installation status: %v", err)
