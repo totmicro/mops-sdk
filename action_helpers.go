@@ -963,6 +963,61 @@ func (b *PluginBuilder) WithShellCommands(commands map[string]ShellCommandEntry)
 	return b.WithBasicMenuProvider(entries)
 }
 
+// WithResilientFunction adds a menu entry that handles command errors gracefully
+//
+// DEPRECATED: System-level safety net now handles all errors automatically.
+// Use regular AddInteractive() instead - all functions are now automatically resilient.
+func (b *PluginBuilder) WithResilientFunction(key, label string, fn InteractiveGoFunction) *PluginBuilder {
+	// With system-level safety net, this is equivalent to just adding the function directly
+	b.base.AddInteractiveFunction(key, fn)
+	
+	entry := MenuEntry{
+		Key:     key,
+		Label:   label,
+		Action:  "core_interactive-go",
+		Command: key,
+	}
+	
+	return b.WithBasicMenuProvider([]MenuEntry{entry})
+}
+
+// WithResilientShellCommand adds a shell command that won't crash the plugin on failure
+//
+// DEPRECATED: System-level safety net now handles all shell command errors automatically.
+// Use regular shell command patterns - failures will be handled gracefully by the system.
+func (b *PluginBuilder) WithResilientShellCommand(key, label, description, command string) *PluginBuilder {
+	shellFn := func(ctx context.Context, outputChan chan<- string, inputChan <-chan string, params map[string]interface{}) error {
+		// With system-level safety net, we can use simple error handling
+		// The system will convert any errors to user messages automatically
+		
+		// Create cross-plugin invoker
+		invoker := NewCrossPluginInvoker(ctx, outputChan, inputChan)
+		
+		// Use invoker to call core shell command
+		outputChan <- fmt.Sprintf("🐚 Executing: %s", command)
+		outputChan <- ""
+		
+		result, err := invoker.InvokeFunction("core_shell-command", map[string]interface{}{
+			"command": command,
+		})
+		
+		if err != nil {
+			// System safety net will handle this error gracefully
+			return fmt.Errorf("failed to invoke shell command: %w", err)
+		}
+		
+		if !result.Success && result.Error != nil {
+			// System safety net will handle this error gracefully
+			return fmt.Errorf("shell command failed: %w", result.Error)
+		}
+		
+		outputChan <- "✅ Command completed successfully"
+		return nil
+	}
+	
+	return b.WithResilientFunction(key, label, shellFn)
+}
+
 // WithShellCommand adds a single shell command menu entry
 func (b *PluginBuilder) WithShellCommand(key, label, description, command string) *PluginBuilder {
 	return b.WithShellCommands(map[string]ShellCommandEntry{

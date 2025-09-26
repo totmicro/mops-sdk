@@ -63,10 +63,15 @@ func (c *CrossPluginInvoker) InvokeFunction(functionName string, params map[stri
 				result.Success = true
 				return result, nil
 			} else if strings.HasPrefix(response, "MOPS_CROSS_PLUGIN_ERROR:") {
-				// Error result
+				// Error result - system safety net will handle this gracefully
 				errorMsg := strings.TrimPrefix(response, "MOPS_CROSS_PLUGIN_ERROR:")
 				result.Success = false
 				result.Error = fmt.Errorf("cross-plugin invocation error: %s", errorMsg)
+				
+				// System safety net handles this, but we can still provide user feedback
+				c.outputChan <- fmt.Sprintf("⚠️ Cross-plugin command failed: %s", errorMsg)
+				
+				// Return the error - system safety net will convert it to user message if needed
 				return result, result.Error
 			} else if strings.HasPrefix(response, "MOPS_CROSS_PLUGIN_OUTPUT:") {
 				// Output line from the invoked function
