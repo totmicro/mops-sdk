@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os/exec"
 	"sort"
 	"strconv"
 	"strings"
@@ -34,6 +35,7 @@ type GitHubReleaseAsset struct {
 // GitHubReleaseHelper provides utilities for working with GitHub releases
 type GitHubReleaseHelper struct {
 	client *http.Client
+	token  string // GitHub authentication token
 }
 
 // NewGitHubReleaseHelper creates a new GitHub release helper
@@ -43,6 +45,61 @@ func NewGitHubReleaseHelper() *GitHubReleaseHelper {
 			Timeout: 30 * time.Second,
 		},
 	}
+}
+
+// NewGitHubReleaseHelperWithAuth creates a new GitHub release helper with authentication
+func NewGitHubReleaseHelperWithAuth(token string) *GitHubReleaseHelper {
+	return &GitHubReleaseHelper{
+		client: &http.Client{
+			Timeout: 30 * time.Second,
+		},
+		token: token,
+	}
+}
+
+// NewAuthenticatedGitHubReleaseHelper creates a GitHub release helper with automatic gh CLI authentication
+func NewAuthenticatedGitHubReleaseHelper() (*GitHubReleaseHelper, error) {
+	helper := NewGitHubReleaseHelper()
+	
+	// Try to get token from gh CLI
+	token, err := helper.getGitHubTokenFromGHCLI()
+	if err != nil {
+		return nil, fmt.Errorf("failed to authenticate with GitHub: %w", err)
+	}
+	
+	helper.token = token
+	return helper, nil
+}
+
+// getGitHubTokenFromGHCLI attempts to get a GitHub token from the authenticated gh CLI
+func (g *GitHubReleaseHelper) getGitHubTokenFromGHCLI() (string, error) {
+	// Try to get token using gh CLI
+	cmd := exec.Command("gh", "auth", "token")
+	output, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to get GitHub token from gh CLI: %w (make sure 'gh auth login' has been run)", err)
+	}
+	
+	token := strings.TrimSpace(string(output))
+	if token == "" {
+		return "", fmt.Errorf("gh CLI returned empty token")
+	}
+	
+	return token, nil
+}
+
+// isGHCLIAvailable checks if GitHub CLI is installed and authenticated
+func (g *GitHubReleaseHelper) isGHCLIAvailable() bool {
+	// Check if gh command exists
+	_, err := exec.LookPath("gh")
+	if err != nil {
+		return false
+	}
+	
+	// Check if gh is authenticated
+	cmd := exec.Command("gh", "auth", "status")
+	err = cmd.Run()
+	return err == nil
 }
 
 // GetLatestRelease fetches the latest release for a GitHub repository
@@ -59,13 +116,29 @@ func (g *GitHubReleaseHelper) GetLatestRelease(owner, repo string) (*GitHubRelea
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
 	
+	// Add authentication if token is available
+	if g.token != "" {
+		req.Header.Set("Authorization", "Bearer "+g.token)
+	} else {
+		// Try to get token from gh CLI for private repos
+		if token, err := g.getGitHubTokenFromGHCLI(); err == nil {
+			g.token = token // Cache the token for subsequent requests
+			req.Header.Set("Authorization", "Bearer "+g.token)
+		}
+		// If gh CLI fails, continue without auth (for public repos)
+	}
+	
 	resp, err := g.client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch release: %w", err)
 	}
 	defer resp.Body.Close()
 	
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, fmt.Errorf("repository %s/%s not found or no releases available (may be private - ensure gh CLI is authenticated)", owner, repo)
+	} else if resp.StatusCode == http.StatusForbidden {
+		return nil, fmt.Errorf("access denied to repository %s/%s (may be private - ensure gh CLI is authenticated with 'gh auth login')", owner, repo)
+	} else if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("GitHub API returned status %d", resp.StatusCode)
 	}
 	
