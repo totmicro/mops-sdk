@@ -3,7 +3,9 @@ package sdk
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"os"
 	"os/exec"
 	"sort"
 	"strconv"
@@ -25,11 +27,13 @@ type GitHubRelease struct {
 
 // GitHubReleaseAsset represents a release asset
 type GitHubReleaseAsset struct {
+	ID                 int64  `json:"id"`
 	Name               string `json:"name"`
 	Label              string `json:"label"`
 	ContentType        string `json:"content_type"`
 	Size               int64  `json:"size"`
 	BrowserDownloadURL string `json:"browser_download_url"`
+	URL                string `json:"url"` // API URL for authenticated downloads
 }
 
 // GitHubReleaseHelper provides utilities for working with GitHub releases
@@ -345,4 +349,63 @@ func (g *GitHubReleaseHelper) GetReleases(owner, repo string, limit int) ([]GitH
 	})
 	
 	return releases, nil
+}
+
+// FindAssetByName finds an asset by name pattern in a release
+func (g *GitHubReleaseHelper) FindAssetByName(release *GitHubRelease, namePattern string) *GitHubReleaseAsset {
+	for _, asset := range release.Assets {
+		if strings.Contains(asset.Name, namePattern) || asset.Name == namePattern {
+			return &asset
+		}
+	}
+	return nil
+}
+
+// DownloadAsset downloads an asset from a private repository using authentication
+func (g *GitHubReleaseHelper) DownloadAsset(asset *GitHubReleaseAsset, outputPath string) error {
+	if g.token == "" {
+		return fmt.Errorf("authentication token required for asset downloads from private repositories")
+	}
+
+	// Use the API URL for authenticated downloads
+	req, err := http.NewRequest("GET", asset.URL, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create download request: %w", err)
+	}
+
+	// Set required headers for asset download
+	req.Header.Set("Accept", "application/octet-stream")
+	req.Header.Set("Authorization", "Bearer "+g.token)
+	req.Header.Set("User-Agent", "mops-plugin/1.0")
+	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+
+	resp, err := g.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to download asset: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("download failed with status %d", resp.StatusCode)
+	}
+
+	// Create output file
+	outFile, err := os.Create(outputPath)
+	if err != nil {
+		return fmt.Errorf("failed to create output file: %w", err)
+	}
+	defer outFile.Close()
+
+	// Copy downloaded content to file
+	_, err = io.Copy(outFile, resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to write downloaded content: %w", err)
+	}
+
+	return nil
+}
+
+// GetToken returns the GitHub token if available
+func (g *GitHubReleaseHelper) GetToken() string {
+	return g.token
 }

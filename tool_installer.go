@@ -22,6 +22,8 @@ type ToolInstallCommand struct {
 	Env map[string]string `yaml:"env,omitempty"`
 	// Whether this command requires sudo/elevated privileges
 	RequiresSudo bool `yaml:"requires_sudo,omitempty"`
+	// Whether to prime sudo cache before command execution (without running command as root)
+	PrimeSudoCache bool `yaml:"prime_sudo_cache,omitempty"`
 	// Shell to use for command execution (defaults to system shell)
 	Shell string `yaml:"shell,omitempty"`
 }
@@ -293,9 +295,16 @@ func (ti *ToolInstaller) getToolVersion(versionCmd *ToolInstallCommand, parser f
 
 // executeCommand executes a tool install command with streaming output
 func (ti *ToolInstaller) executeCommand(toolCmd *ToolInstallCommand, operation string) error {
+	// Prime sudo cache if requested (but don't run the command as root)
+	if toolCmd.PrimeSudoCache && runtime.GOOS != "windows" {
+		if err := ti.primeSudoCacheOnly(); err != nil {
+			return fmt.Errorf("failed to prime sudo cache: %w", err)
+		}
+	}
+
 	cmd := ti.buildCommand(toolCmd)
 
-	// Handle sudo password prompt if required
+	// Handle sudo password prompt if required (command will run as root)
 	if toolCmd.RequiresSudo && runtime.GOOS != "windows" {
 		return ti.executeSudoCommand(cmd, operation)
 	}
@@ -410,6 +419,52 @@ func (ti *ToolInstaller) runCommandDirectly(cmd *exec.Cmd, operation string) err
 		return fmt.Errorf("%s command failed: %w", operation, err)
 	}
 
+	return nil
+}
+
+// primeSudoCacheOnly primes the sudo cache without running any subsequent commands as root
+func (ti *ToolInstaller) primeSudoCacheOnly() error {
+	// Check if we can run sudo without password prompt
+	sudoInfo, err := ti.sudoChecker.CheckSudoPrivileges()
+	if err == nil && sudoInfo.CanSudoWithoutPwd {
+		// Sudo cache is already valid or no password required
+		ti.outputChan <- "🔐 Sudo privileges available"
+		return nil
+	}
+
+	// Get password from user using InputRequester
+	password, err := ti.inputRequester.RequestPassword("Enter sudo password:")
+	if err != nil {
+		return fmt.Errorf("failed to get sudo password: %w", err)
+	}
+
+	// Prime the sudo cache using a dummy command with the provided password
+	ti.outputChan <- "🔐 Authenticating with sudo..."
+	primeCmd := exec.CommandContext(ti.ctx, "sudo", "-S", "echo", "Sudo access granted")
+	
+	stdin, err := primeCmd.StdinPipe()
+	if err != nil {
+		return fmt.Errorf("failed to create stdin pipe for sudo authentication: %w", err)
+	}
+
+	// Start the sudo prime command
+	if err := primeCmd.Start(); err != nil {
+		stdin.Close()
+		return fmt.Errorf("failed to start sudo authentication: %w", err)
+	}
+
+	// Send password to authenticate
+	go func() {
+		defer stdin.Close()
+		stdin.Write([]byte(password + "\n"))
+	}()
+
+	// Wait for authentication to complete
+	if err := primeCmd.Wait(); err != nil {
+		return fmt.Errorf("sudo authentication failed - please check your password: %w", err)
+	}
+
+	ti.outputChan <- "✅ Sudo authentication successful"
 	return nil
 }
 
