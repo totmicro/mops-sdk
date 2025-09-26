@@ -62,6 +62,38 @@ func (sc *SudoChecker) CheckSudoPrivileges() (*SudoInfo, error) {
 	return info, nil
 }
 
+// CheckSudoAvailability performs a safe check without calling sudo commands
+func (sc *SudoChecker) CheckSudoAvailability() (*SudoInfo, error) {
+	info := &SudoInfo{
+		CurrentUser: sc.getCurrentUser(),
+	}
+
+	// Only supported on Unix-like systems
+	if runtime.GOOS == "windows" {
+		info.ErrorMessage = "sudo privilege checking is not supported on Windows"
+		return info, nil
+	}
+
+	// Check if running as root
+	info.IsRoot = sc.isRunningAsRoot()
+
+	// Find sudo binary
+	sudoPath, hasSudo := sc.findSudo()
+	info.HasSudo = hasSudo
+	info.SudoPath = sudoPath
+
+	if !hasSudo {
+		info.ErrorMessage = "sudo binary not found in system PATH"
+		return info, nil
+	}
+
+	// For safety, don't check passwordless sudo or cache - just report availability
+	info.CanSudoWithoutPwd = false // Conservative default
+	info.SudoTimeLeft = 0         // Conservative default
+
+	return info, nil
+}
+
 // HasSudo returns true if sudo is available and user can use it
 func (sc *SudoChecker) HasSudo() bool {
 	info, err := sc.CheckSudoPrivileges()
@@ -237,6 +269,28 @@ func (sc *SudoChecker) GetSudoStatus() string {
 	}
 
 	return "sudo available (password required)"
+}
+
+// GetSafeSudoStatus returns a human-readable status string without calling sudo
+func (sc *SudoChecker) GetSafeSudoStatus() string {
+	info, err := sc.CheckSudoAvailability()
+	if err != nil {
+		return "Error checking sudo status"
+	}
+
+	if runtime.GOOS == "windows" {
+		return "Windows (sudo not applicable)"
+	}
+
+	if info.IsRoot {
+		return "Running as root user"
+	}
+
+	if !info.HasSudo {
+		return "sudo not available"
+	}
+
+	return "sudo available"
 }
 
 // NewError creates a formatted error - helper function

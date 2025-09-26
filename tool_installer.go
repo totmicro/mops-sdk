@@ -67,17 +67,21 @@ type ToolInstallResult struct {
 
 // ToolInstaller provides cross-platform tool installation with custom scripts and commands
 type ToolInstaller struct {
-	ctx        context.Context
-	outputChan chan<- string
-	inputChan  <-chan string
+	ctx            context.Context
+	outputChan     chan<- string
+	inputChan      <-chan string
+	sudoChecker    *SudoChecker
+	inputRequester InputRequester
 }
 
 // NewToolInstaller creates a new tool installer instance
 func NewToolInstaller(ctx context.Context, outputChan chan<- string, inputChan <-chan string) *ToolInstaller {
 	return &ToolInstaller{
-		ctx:        ctx,
-		outputChan: outputChan,
-		inputChan:  inputChan,
+		ctx:            ctx,
+		outputChan:     outputChan,
+		inputChan:      inputChan,
+		sudoChecker:    &SudoChecker{},
+		inputRequester: NewInputRequester(ctx, outputChan, inputChan),
 	}
 }
 
@@ -291,6 +295,11 @@ func (ti *ToolInstaller) getToolVersion(versionCmd *ToolInstallCommand, parser f
 func (ti *ToolInstaller) executeCommand(toolCmd *ToolInstallCommand, operation string) error {
 	cmd := ti.buildCommand(toolCmd)
 
+	// Handle sudo password prompt if required
+	if toolCmd.RequiresSudo && runtime.GOOS != "windows" {
+		return ti.executeSudoCommand(cmd, operation)
+	}
+
 	// Create pipes for real-time output streaming
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -321,6 +330,100 @@ func (ti *ToolInstaller) executeCommand(toolCmd *ToolInstallCommand, operation s
 
 	// Wait for command completion
 	if err := <-done; err != nil {
+		return fmt.Errorf("%s command failed: %w", operation, err)
+	}
+
+	return nil
+}
+
+// executeSudoCommand handles sudo command execution with password prompting
+func (ti *ToolInstaller) executeSudoCommand(cmd *exec.Cmd, operation string) error {
+	// Check if we can run sudo without password prompt
+	sudoInfo, err := ti.sudoChecker.CheckSudoPrivileges()
+	if err == nil && sudoInfo.CanSudoWithoutPwd {
+		// Execute directly without password prompt
+		return ti.runCommandDirectly(cmd, operation)
+	}
+
+	// Get password from user using InputRequester
+	password, err := ti.inputRequester.RequestPassword("Enter sudo password:")
+	if err != nil {
+		return fmt.Errorf("failed to get sudo password: %w", err)
+	}
+
+	// Convert command to use sudo -S (read password from stdin)
+	sudoArgs := append([]string{"-S"}, cmd.Args[1:]...) // Skip "sudo" from original args
+	sudoCmd := exec.CommandContext(ti.ctx, "sudo", sudoArgs...)
+	sudoCmd.Dir = cmd.Dir
+	sudoCmd.Env = cmd.Env
+
+	// Create stdin pipe for password
+	stdin, err := sudoCmd.StdinPipe()
+	if err != nil {
+		return fmt.Errorf("failed to create stdin pipe: %w", err)
+	}
+
+	// Set up output pipes for real-time streaming
+	stdout, err := sudoCmd.StdoutPipe()
+	if err != nil {
+		stdin.Close()
+		return fmt.Errorf("failed to create stdout pipe: %w", err)
+	}
+
+	stderr, err := sudoCmd.StderrPipe()
+	if err != nil {
+		stdin.Close()
+		return fmt.Errorf("failed to create stderr pipe: %w", err)
+	}
+
+	// Start the command
+	if err := sudoCmd.Start(); err != nil {
+		stdin.Close()
+		return fmt.Errorf("failed to start sudo command: %w", err)
+	}
+
+	// Send password immediately to stdin
+	go func() {
+		defer stdin.Close()
+		stdin.Write([]byte(password + "\n"))
+	}()
+
+	// Stream outputs
+	go ti.streamOutput(stdout, "")
+	go ti.streamOutput(stderr, "⚠️  ")
+
+	// Wait for command completion
+	if err := sudoCmd.Wait(); err != nil {
+		return fmt.Errorf("%s command failed: %w", operation, err)
+	}
+
+	return nil
+}
+
+// runCommandDirectly executes a command directly with output streaming
+func (ti *ToolInstaller) runCommandDirectly(cmd *exec.Cmd, operation string) error {
+	// Set up output pipes for real-time streaming
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return fmt.Errorf("failed to create stdout pipe: %w", err)
+	}
+
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return fmt.Errorf("failed to create stderr pipe: %w", err)
+	}
+
+	// Start the command
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("failed to start command: %w", err)
+	}
+
+	// Stream outputs
+	go ti.streamOutput(stdout, "")
+	go ti.streamOutput(stderr, "⚠️  ")
+
+	// Wait for command completion
+	if err := cmd.Wait(); err != nil {
 		return fmt.Errorf("%s command failed: %w", operation, err)
 	}
 
