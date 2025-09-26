@@ -336,12 +336,12 @@ func (ti *ToolInstaller) executeCommand(toolCmd *ToolInstallCommand, operation s
 	return nil
 }
 
-// executeSudoCommand handles sudo command execution with password prompting
+// executeSudoCommand handles sudo authentication by priming the sudo cache, then runs the original command
 func (ti *ToolInstaller) executeSudoCommand(cmd *exec.Cmd, operation string) error {
 	// Check if we can run sudo without password prompt
 	sudoInfo, err := ti.sudoChecker.CheckSudoPrivileges()
 	if err == nil && sudoInfo.CanSudoWithoutPwd {
-		// Execute directly without password prompt
+		// Execute directly without password prompt - sudo cache is already valid
 		return ti.runCommandDirectly(cmd, operation)
 	}
 
@@ -351,53 +351,36 @@ func (ti *ToolInstaller) executeSudoCommand(cmd *exec.Cmd, operation string) err
 		return fmt.Errorf("failed to get sudo password: %w", err)
 	}
 
-	// Convert command to use sudo -S (read password from stdin)
-	sudoArgs := append([]string{"-S"}, cmd.Args[1:]...) // Skip "sudo" from original args
-	sudoCmd := exec.CommandContext(ti.ctx, "sudo", sudoArgs...)
-	sudoCmd.Dir = cmd.Dir
-	sudoCmd.Env = cmd.Env
-
-	// Create stdin pipe for password
-	stdin, err := sudoCmd.StdinPipe()
+	// Prime the sudo cache using a dummy command with the provided password
+	ti.outputChan <- "🔐 Authenticating with sudo..."
+	primeCmd := exec.CommandContext(ti.ctx, "sudo", "-S", "echo", "sudo authentication successful")
+	
+	stdin, err := primeCmd.StdinPipe()
 	if err != nil {
-		return fmt.Errorf("failed to create stdin pipe: %w", err)
+		return fmt.Errorf("failed to create stdin pipe for sudo authentication: %w", err)
 	}
 
-	// Set up output pipes for real-time streaming
-	stdout, err := sudoCmd.StdoutPipe()
-	if err != nil {
+	// Start the sudo prime command
+	if err := primeCmd.Start(); err != nil {
 		stdin.Close()
-		return fmt.Errorf("failed to create stdout pipe: %w", err)
+		return fmt.Errorf("failed to start sudo authentication: %w", err)
 	}
 
-	stderr, err := sudoCmd.StderrPipe()
-	if err != nil {
-		stdin.Close()
-		return fmt.Errorf("failed to create stderr pipe: %w", err)
-	}
-
-	// Start the command
-	if err := sudoCmd.Start(); err != nil {
-		stdin.Close()
-		return fmt.Errorf("failed to start sudo command: %w", err)
-	}
-
-	// Send password immediately to stdin
+	// Send password to authenticate
 	go func() {
 		defer stdin.Close()
 		stdin.Write([]byte(password + "\n"))
 	}()
 
-	// Stream outputs
-	go ti.streamOutput(stdout, "")
-	go ti.streamOutput(stderr, "⚠️  ")
-
-	// Wait for command completion
-	if err := sudoCmd.Wait(); err != nil {
-		return fmt.Errorf("%s command failed: %w", operation, err)
+	// Wait for authentication to complete
+	if err := primeCmd.Wait(); err != nil {
+		return fmt.Errorf("sudo authentication failed - please check your password: %w", err)
 	}
 
-	return nil
+	ti.outputChan <- "✅ Sudo authentication successful"
+
+	// Now run the original command - sudo cache will be used for internal sudo calls
+	return ti.runCommandDirectly(cmd, operation)
 }
 
 // runCommandDirectly executes a command directly with output streaming
