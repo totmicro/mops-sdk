@@ -523,60 +523,6 @@ func (s *PluginRPCServer) RegisterInteractiveFunctions(args interface{}, resp *m
 	return nil
 }
 
-func (s *PluginRPCServer) CallInteractiveFunction(args *InteractiveFunctionCallArgs, resp *InteractiveFunctionCallResponse) error {
-	functions := s.Impl.RegisterInteractiveFunctions()
-
-	fn, exists := functions[args.Name]
-	if !exists {
-		return fmt.Errorf("function %s not found", args.Name)
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	outputChan := make(chan string, 1000)
-	inputChan := make(chan string, 100)
-	defer close(inputChan)
-
-	errChan := make(chan error, 1)
-	go func() {
-		defer close(outputChan)
-		defer close(errChan)
-
-		if err := fn(ctx, outputChan, inputChan, args.Params); err != nil {
-			errChan <- err
-		}
-	}()
-
-	var output []string
-	var funcError error
-
-	for {
-		select {
-		case line, ok := <-outputChan:
-			if !ok {
-				select {
-				case err := <-errChan:
-					funcError = err
-				default:
-				}
-				goto done
-			}
-			output = append(output, line)
-		case err := <-errChan:
-			funcError = err
-		case <-ctx.Done():
-			funcError = fmt.Errorf("function timed out")
-			goto done
-		}
-	}
-
-done:
-	resp.Output = output
-	resp.Error = funcError
-	return nil
-}
-
 func (s *PluginRPCServer) GetCLICommands(args interface{}, resp *map[string]CLICommandInfo) error {
 	commands, err := s.Impl.GetCLICommands()
 	if err != nil {
@@ -994,16 +940,6 @@ type DynamicProviderRPC struct {
 	Description string
 }
 
-type InteractiveFunctionCallArgs struct {
-	Name   string
-	Params map[string]interface{}
-}
-
-type InteractiveFunctionCallResponse struct {
-	Output []string
-	Error  error
-}
-
 type CLICommandExecuteArgs struct {
 	Name string
 	Args []string
@@ -1017,12 +953,6 @@ type CLICommandExecuteResponse struct {
 type ProviderGenerateEntriesArgs struct {
 	Name  string
 	Param string
-}
-
-type ExecutorExecuteArgs struct {
-	ActionType string
-	Entry      MenuEntry
-	Input      string
 }
 
 // Streaming Interactive Function RPC Types
