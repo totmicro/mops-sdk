@@ -335,7 +335,7 @@ func (ti *ToolInstaller) executeCommand(toolCmd *ToolInstallCommand, operation s
 	go ti.streamOutput(stdout, "")
 	
 	// Stream stderr  
-	go ti.streamOutput(stderr, "⚠️  ")
+	go ti.streamOutput(stderr, "")
 
 	// Wait for command completion
 	if err := <-done; err != nil {
@@ -412,7 +412,7 @@ func (ti *ToolInstaller) runCommandDirectly(cmd *exec.Cmd, operation string) err
 
 	// Stream outputs
 	go ti.streamOutput(stdout, "")
-	go ti.streamOutput(stderr, "⚠️  ")
+	go ti.streamOutput(stderr, "")
 
 	// Wait for command completion
 	if err := cmd.Wait(); err != nil {
@@ -583,7 +583,7 @@ func (ti *ToolInstaller) streamOutput(pipe io.ReadCloser, prefix string) {
 			}
 			if err != nil {
 				if err != io.EOF {
-					ti.outputChan <- fmt.Sprintf("⚠️  Error reading output: %v", err)
+					ti.outputChan <- fmt.Sprintf("Error reading output: %v", err)
 				}
 				return
 			}
