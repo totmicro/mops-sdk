@@ -41,6 +41,43 @@ const (
 	ProtocolVersion = 1
 )
 
+// Parent process monitoring - simple KISS approach
+var lastHealthCheck = time.Now()
+const parentTimeoutDuration = 30 * time.Second
+
+// startParentMonitoring starts a simple goroutine to monitor parent process health
+func startParentMonitoring() {
+	go func() {
+		for {
+			time.Sleep(5 * time.Second)
+			if time.Since(lastHealthCheck) > parentTimeoutDuration {
+				// Log the shutdown reason with useful context
+				if logger := GetPluginLogger(); logger != nil {
+					logger.WithFields(map[string]interface{}{
+						"last_health_check":     lastHealthCheck.Format(time.RFC3339),
+						"time_since_last_check": time.Since(lastHealthCheck).String(),
+						"timeout_threshold":     parentTimeoutDuration.String(),
+					}).Warn("Parent process (MOPS core) stopped responding to health checks - shutting down plugin")
+				}
+				
+				os.Exit(0) // Parent process appears dead
+			}
+		}
+	}()
+}
+
+// GetParentMonitoringStatus returns information about the parent process monitoring
+// This can be useful for debugging or status checks
+func GetParentMonitoringStatus() map[string]interface{} {
+	return map[string]interface{}{
+		"monitoring_enabled":    true,
+		"last_health_check":     lastHealthCheck.Format(time.RFC3339),
+		"time_since_last_check": time.Since(lastHealthCheck).String(),
+		"timeout_threshold":     parentTimeoutDuration.String(),
+		"parent_alive":          time.Since(lastHealthCheck) <= parentTimeoutDuration,
+	}
+}
+
 // PluginMap is the map of plugins we can dispense.
 var PluginMap = map[string]plugin.Plugin{
 	PluginName: &MopsPlugin{},
@@ -53,6 +90,9 @@ type MopsPlugin struct {
 }
 
 func (p *MopsPlugin) Server(*plugin.MuxBroker) (interface{}, error) {
+	// Start parent process monitoring
+	startParentMonitoring()
+	
 	return &PluginRPCServer{Impl: p.Impl}, nil
 }
 
@@ -412,6 +452,14 @@ type PluginRPCServer struct {
 }
 
 func (s *PluginRPCServer) GetInfo(args interface{}, resp *PluginInfoRPC) error {
+	// Update the last health check timestamp
+	lastHealthCheck = time.Now()
+	
+	// Optional debug logging (can be useful for troubleshooting)
+	if logger := GetPluginLogger(); logger != nil {
+		logger.Debugf("Parent process health check received at %s", lastHealthCheck.Format(time.RFC3339))
+	}
+	
 	info := s.Impl.GetInfo()
 	rpcInfo, err := NewPluginInfoRPC(info)
 	if err != nil {
