@@ -7,17 +7,18 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
 	"gopkg.in/yaml.v2"
 )
 
 // SimplePluginConfig provides a configuration structure for quick plugin setup
 type SimplePluginConfig struct {
-	Author              string                            // Plugin author
-	DisplayName         string                            // Plugin display name
-	AutoLoadPresets     bool                              // Whether to auto-load presets from plugin.yaml
+	Author               string                           // Plugin author
+	DisplayName          string                           // Plugin display name
+	AutoLoadPresets      bool                             // Whether to auto-load presets from plugin.yaml
 	InteractiveFunctions map[string]InteractiveGoFunction // Interactive functions
-	MenuEntries         []MenuEntry                       // Menu entries for UI
-	CLIShortcuts        []CLIShortcut                     // CLI shortcuts for menu access
+	MenuEntries          []MenuEntry                      // Menu entries for UI
+	CLIShortcuts         []CLIShortcut                    // CLI shortcuts for menu access
 }
 
 // CLIShortcut represents a CLI shortcut configuration
@@ -29,20 +30,20 @@ type CLIShortcut struct {
 
 // FormField represents a form field configuration for input menus
 type FormField struct {
-	Key    string // Field identifier
-	Label  string // Field display label
-	Type   string // Field type (text, number, etc.)
+	Key   string // Field identifier
+	Label string // Field display label
+	Type  string // Field type (text, number, etc.)
 }
 
 // ParameterType represents the data type of a parameter
 type ParameterType string
 
 const (
-	StringParam  ParameterType = "string"
-	IntParam     ParameterType = "int"
-	BoolParam    ParameterType = "bool"
-	PortParam    ParameterType = "port"
-	UrlParam     ParameterType = "url"
+	StringParam ParameterType = "string"
+	IntParam    ParameterType = "int"
+	BoolParam   ParameterType = "bool"
+	PortParam   ParameterType = "port"
+	UrlParam    ParameterType = "url"
 )
 
 // ParameterDefinition defines validation rules and metadata for a parameter
@@ -75,12 +76,12 @@ func (p *ParameterDefinition) ValidateValue(value string) error {
 	if p.Required && value == "" {
 		return ValidationError{Parameter: p.Name, Message: "is required"}
 	}
-	
+
 	// If empty and not required, use default or skip validation
 	if value == "" {
 		return nil
 	}
-	
+
 	// Type validation
 	switch p.Type {
 	case IntParam:
@@ -94,7 +95,7 @@ func (p *ParameterDefinition) ValidateValue(value string) error {
 		if p.MaxValue != nil && intVal > *p.MaxValue {
 			return ValidationError{Parameter: p.Name, Message: fmt.Sprintf("must be at most %d", *p.MaxValue)}
 		}
-		
+
 	case PortParam:
 		port, err := strconv.Atoi(value)
 		if err != nil {
@@ -103,18 +104,18 @@ func (p *ParameterDefinition) ValidateValue(value string) error {
 		if port < 1 || port > 65535 {
 			return ValidationError{Parameter: p.Name, Message: "must be between 1 and 65535"}
 		}
-		
+
 	case BoolParam:
 		if value != "true" && value != "false" && value != "1" && value != "0" {
 			return ValidationError{Parameter: p.Name, Message: "must be true, false, 1, or 0"}
 		}
-		
+
 	case UrlParam:
 		if !strings.HasPrefix(value, "http://") && !strings.HasPrefix(value, "https://") {
 			return ValidationError{Parameter: p.Name, Message: "must be a valid URL (http:// or https://)"}
 		}
 	}
-	
+
 	// Pattern validation
 	if p.Pattern != "" {
 		matched, err := regexp.MatchString(p.Pattern, value)
@@ -125,7 +126,7 @@ func (p *ParameterDefinition) ValidateValue(value string) error {
 			return ValidationError{Parameter: p.Name, Message: fmt.Sprintf("does not match required pattern: %s", p.Pattern)}
 		}
 	}
-	
+
 	// Choices validation
 	if len(p.Choices) > 0 {
 		valid := false
@@ -139,28 +140,28 @@ func (p *ParameterDefinition) ValidateValue(value string) error {
 			return ValidationError{Parameter: p.Name, Message: fmt.Sprintf("must be one of: %s", strings.Join(p.Choices, ", "))}
 		}
 	}
-	
+
 	return nil
 }
 
 // ParseAndValidate parses CLI arguments against parameter definitions and returns validated values
 func ParseAndValidateArgs(args []string, definitions []ParameterDefinition) (map[string]string, error) {
 	result := make(map[string]string)
-	
+
 	// Initialize with defaults
 	for _, def := range definitions {
 		if def.Default != "" {
 			result[def.Name] = def.Default
 		}
 	}
-	
+
 	// Parse arguments
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
-		
+
 		if strings.HasPrefix(arg, "--") {
 			var key, value string
-			
+
 			if strings.Contains(arg, "=") {
 				// Format: --key=value
 				parts := strings.SplitN(arg[2:], "=", 2)
@@ -177,7 +178,7 @@ func ParseAndValidateArgs(args []string, definitions []ParameterDefinition) (map
 					value = "true"
 				}
 			}
-			
+
 			// Find parameter definition
 			var paramDef *ParameterDefinition
 			for _, def := range definitions {
@@ -186,20 +187,20 @@ func ParseAndValidateArgs(args []string, definitions []ParameterDefinition) (map
 					break
 				}
 			}
-			
+
 			if paramDef == nil {
 				return nil, fmt.Errorf("unknown parameter: --%s", key)
 			}
-			
+
 			// Validate and store
 			if err := paramDef.ValidateValue(value); err != nil {
 				return nil, err
 			}
-			
+
 			result[key] = value
 		}
 	}
-	
+
 	// Check required parameters
 	for _, def := range definitions {
 		if def.Required {
@@ -208,7 +209,7 @@ func ParseAndValidateArgs(args []string, definitions []ParameterDefinition) (map
 			}
 		}
 	}
-	
+
 	return result, nil
 }
 
@@ -352,19 +353,19 @@ func (b *PluginBuilder) WithBasicMenuProvider(entries []MenuEntry) *PluginBuilde
 		// Automatically prefix menu entry IDs with plugin name to ensure uniqueness
 		pluginName := b.getInfo().Name
 		var prefixedEntries []MenuEntry
-		
+
 		for _, entry := range entries {
 			// Create a copy of the entry to avoid modifying the original
 			prefixedEntry := entry
-			
+
 			// Only prefix ID if it doesn't already contain a colon (plugin prefix)
 			if entry.ID != "" && !strings.Contains(entry.ID, ":") {
 				prefixedEntry.ID = pluginName + ":" + entry.ID
 			}
-			
+
 			prefixedEntries = append(prefixedEntries, prefixedEntry)
 		}
-		
+
 		return prefixedEntries, nil
 	})
 }
@@ -383,7 +384,7 @@ func (b *PluginBuilder) WithMenuStartupShortcut(command, menuID, description str
 func (b *PluginBuilder) WithAutoConfigPresets() *PluginBuilder {
 	// Get the plugin info which should have embedded metadata loaded
 	info := b.getInfo()
-	
+
 	// Extract global config as base configuration from presets
 	var globalConfig map[string]interface{}
 	if globalPreset, exists := info.ConfigPresets["global"]; exists {
@@ -391,7 +392,7 @@ func (b *PluginBuilder) WithAutoConfigPresets() *PluginBuilder {
 		// Remove global from selectable presets since it's just a base
 		delete(info.ConfigPresets, "global")
 	}
-	
+
 	// Process each remaining preset with hierarchical inheritance
 	for presetName, preset := range info.ConfigPresets {
 		// Start with global config as base
@@ -399,25 +400,25 @@ func (b *PluginBuilder) WithAutoConfigPresets() *PluginBuilder {
 		for key, value := range globalConfig {
 			mergedConfig[key] = value
 		}
-		
+
 		// Merge preset-specific config (overwrites global values)
 		for key, value := range preset.Config {
 			mergedConfig[key] = value
 		}
-		
+
 		// Update the preset with merged config
 		info.ConfigPresets[presetName] = ConfigPreset{
 			Name:        preset.Name,
 			Description: preset.Description,
 			Config:      mergedConfig,
 		}
-		
+
 		// If this is the default preset, also set it as the plugin's default config
 		if presetName == "default" {
 			info.DefaultConfig = mergedConfig
 		}
 	}
-	
+
 	return b
 }
 
@@ -443,15 +444,15 @@ func (b *PluginBuilder) WithFormMenu(menuID, title string, fields []FormField, s
 			Action: "input",
 		})
 	}
-	
+
 	// Add submit button
 	entries = append(entries, MenuEntry{
-		Key:    "submit",
-		Label:  "✅ Submit",
-		Action: "action",
+		Key:     "submit",
+		Label:   "✅ Submit",
+		Action:  "action",
 		Command: submitAction,
 	})
-	
+
 	return b.WithMenuProvider(menuID, menuID, title, func(param string) ([]MenuEntry, error) {
 		return entries, nil
 	})
@@ -482,27 +483,27 @@ func (b *PluginBuilder) WithSimplePlugin(config SimplePluginConfig) *PluginBuild
 	if config.DisplayName != "" {
 		b.SetDisplayName(config.DisplayName)
 	}
-	
+
 	// Auto-load presets if enabled
 	if config.AutoLoadPresets {
 		b.WithAutoConfigPresets()
 	}
-	
+
 	// Add interactive functions
 	for name, fn := range config.InteractiveFunctions {
 		b.WithInteractiveFunction(name, fn)
 	}
-	
+
 	// Add menu provider if provided
 	if len(config.MenuEntries) > 0 {
 		b.WithBasicMenuProvider(config.MenuEntries)
 	}
-	
+
 	// Add CLI shortcuts
 	for _, shortcut := range config.CLIShortcuts {
 		b.WithMenuStartupShortcut(shortcut.Command, shortcut.MenuID, shortcut.Description)
 	}
-	
+
 	return b
 }
 
@@ -514,31 +515,31 @@ func (b *PluginBuilder) WithPluginFromYAML() *PluginBuilder {
 		"../plugin.yaml",
 		"../../mops-plugins/plugins/example-plugin/plugin.yaml",
 	}
-	
+
 	var yamlData []byte
 	var err error
-	
+
 	for _, path := range searchPaths {
 		yamlData, err = os.ReadFile(path)
 		if err == nil {
 			break
 		}
 	}
-	
+
 	if err != nil {
 		return b
 	}
-	
+
 	// Parse the full YAML metadata
 	var metadata struct {
-		Name        string `yaml:"name"`
-		DisplayName string `yaml:"display_name"`
-		Author      string `yaml:"author"`
-		Homepage    string `yaml:"homepage"`
-		License     string `yaml:"license"`
+		Name        string   `yaml:"name"`
+		DisplayName string   `yaml:"display_name"`
+		Author      string   `yaml:"author"`
+		Homepage    string   `yaml:"homepage"`
+		License     string   `yaml:"license"`
 		Tags        []string `yaml:"tags"`
 	}
-	
+
 	if err := yaml.Unmarshal(yamlData, &metadata); err == nil {
 		// Apply metadata to plugin
 		if metadata.DisplayName != "" {
@@ -557,30 +558,30 @@ func (b *PluginBuilder) WithPluginFromYAML() *PluginBuilder {
 			b.AddTag(tag)
 		}
 	}
-	
+
 	// Also load presets
 	b.WithAutoConfigPresets()
-	
+
 	return b
 }
 
 // WithQuickSetup: One-liner to create a fully configured plugin (simplified to interactive functions only)
 func (b *PluginBuilder) WithQuickSetup(menuEntries []MenuEntry) *PluginBuilder {
 	return b.
-		WithPluginFromYAML().                    // Auto-load from YAML
-		WithBasicMenuProvider(menuEntries).      // Add menu
+		WithPluginFromYAML().                            // Auto-load from YAML
+		WithBasicMenuProvider(menuEntries).              // Add menu
 		WithMenuStartupShortcut("ui", "main", "Open UI") // Add UI shortcut
 }
 
 // InteractiveMapping defines CLI to Interactive Function mappings
 type InteractiveMapping struct {
-	CLIName        string                       // Name of the CLI command (e.g., "streaming")
-	CLIDescription string                       // Description for CLI help
-	UICommand      string                       // Interactive function name
-	Function       InteractiveGoFunction        // The interactive function implementation (nil to use built-in)
-	Params         map[string]interface{}       // Parameters to pass to the interactive function
-	Hidden         bool                         // Hide this command from CLI help and prevent CLI execution
-	MenuTarget     string                       // Target menu for navigation when no CLI args provided
+	CLIName        string                 // Name of the CLI command (e.g., "streaming")
+	CLIDescription string                 // Description for CLI help
+	UICommand      string                 // Interactive function name
+	Function       InteractiveGoFunction  // The interactive function implementation (nil to use built-in)
+	Params         map[string]interface{} // Parameters to pass to the interactive function
+	Hidden         bool                   // Hide this command from CLI help and prevent CLI execution
+	MenuTarget     string                 // Target menu for navigation when no CLI args provided
 }
 
 // ActionMappingBuilder provides a fluent interface for creating action mappings
@@ -604,7 +605,7 @@ func (amb *ActionMappingBuilder) AddInteractive(mapping InteractiveMapping) *Act
 		fmt.Println("📺 This provides real-time output with rich formatting!")
 		return nil
 	}
-	
+
 	// Add CLI command (hidden or visible based on mapping.Hidden)
 	if mapping.Hidden {
 		amb.builder.WithHiddenCLICommand(mapping.CLIName, mapping.CLIDescription, handler)
@@ -613,12 +614,12 @@ func (amb *ActionMappingBuilder) AddInteractive(mapping InteractiveMapping) *Act
 			mapping.CLIName,
 			mapping.CLIDescription,
 			handler,
-			"core_interactive-go",     // Always use core_interactive-go for streaming
-			"",                   // No target needed for interactive functions
-			mapping.UICommand,    // The function name to call
+			"core_interactive-go", // Always use core_interactive-go for streaming
+			"",                    // No target needed for interactive functions
+			mapping.UICommand,     // The function name to call
 		)
 	}
-	
+
 	// Register the interactive function only if it's not nil (don't override built-in functions)
 	if mapping.Function != nil {
 		amb.builder.WithInteractiveFunction(mapping.UICommand, mapping.Function)
@@ -687,10 +688,10 @@ func SelectionAction(name, description, menuTarget string, directFunction Intera
 func (b *PluginBuilder) WithSelectionMenuProvider(menuID, title string, items []SelectionItem, executeFunction InteractiveGoFunction) *PluginBuilder {
 	// Create executor name with plugin prefix
 	executorName := b.getStandardName(fmt.Sprintf("%s_execute", menuID))
-	
+
 	return b.WithMenuProvider(menuID, menuID, title, func(param string) ([]MenuEntry, error) {
 		var entries []MenuEntry
-		
+
 		// Add selection entries directly without useless header
 		for i, item := range items {
 			// Use custom title if provided, otherwise default format
@@ -700,17 +701,17 @@ func (b *PluginBuilder) WithSelectionMenuProvider(menuID, title string, items []
 			} else {
 				message = fmt.Sprintf("🚀 %s Login", item.Description)
 			}
-			
+
 			entries = append(entries, MenuEntry{
 				Key:     fmt.Sprintf("%d", i+1),
 				Label:   fmt.Sprintf("%s %s - %s", item.Icon, item.Name, item.Description),
 				Action:  "core_interactive-go",
 				Command: executorName,
 				Message: message,
-				Params: item.Params,
+				Params:  item.Params,
 			})
 		}
-		
+
 		return entries, nil
 	}).WithInteractiveFunction(executorName, executeFunction)
 }
@@ -725,60 +726,60 @@ type SelectionItem struct {
 }
 
 // WithArgumentBasedAction creates a complete CLI-with-args pattern:
-// - CLI command with arguments executes directly 
+// - CLI command with arguments executes directly
 // - CLI command without arguments navigates to selection menu
 // - UI menu provides interactive selection
 func (b *PluginBuilder) WithArgumentBasedAction(config ArgumentBasedActionConfig) *PluginBuilder {
 	// Create the full menu ID with plugin prefix
 	fullMenuID := b.getStandardName(config.MenuID)
-	
+
 	// Determine the CLI title to use
 	cliTitle := config.CLITitle
 	if cliTitle == "" {
 		cliTitle = config.MenuTitle // Fall back to menu title if no CLI title specified
 	}
-	
+
 	// Get plugin name for examples
 	pluginName := b.getInfo().Name
-	
+
 	// Create the smart CLI command
 	smartConfig := SmartCLICommandConfig{
-		Command:             config.CommandName,
-		Description:         config.Description,
-		Usage:               fmt.Sprintf("%s [args...]", config.CommandName),
-		SmartFunctionName:   b.getStandardName(fmt.Sprintf("%s_smart_%s", config.CommandName, strings.ReplaceAll(strings.ToLower(cliTitle), " ", "_"))),
-		UITarget:            fullMenuID, // Use the full prefixed menu ID
-		UITitle:             cliTitle,   // Pass CLI title for Bubble Tea display
-		DirectHandler:       nil, // We'll use DirectExecutor instead
-		DirectExecutor:      convertToDirectExecutor(config.DirectFunction, cliTitle, config.Parameters, pluginName, config.ExampleCommand),
+		Command:           config.CommandName,
+		Description:       config.Description,
+		Usage:             fmt.Sprintf("%s [args...]", config.CommandName),
+		SmartFunctionName: b.getStandardName(fmt.Sprintf("%s_smart_%s", config.CommandName, strings.ReplaceAll(strings.ToLower(cliTitle), " ", "_"))),
+		UITarget:          fullMenuID, // Use the full prefixed menu ID
+		UITitle:           cliTitle,   // Pass CLI title for Bubble Tea display
+		DirectHandler:     nil,        // We'll use DirectExecutor instead
+		DirectExecutor:    convertToDirectExecutor(config.DirectFunction, cliTitle, config.Parameters, pluginName, config.ExampleCommand),
 	}
-	
+
 	// Add the smart CLI command
 	b = b.WithSmartCLICommand(smartConfig)
-	
+
 	// Add the selection menu provider
 	return b.WithSelectionMenuProvider(config.MenuID, config.MenuTitle, config.Items, config.ExecuteFunction)
 }
 
 // ArgumentBasedActionConfig configures a complete CLI-with-args action pattern
 type ArgumentBasedActionConfig struct {
-	CommandName     string                    // CLI command name
-	Description     string                    // CLI command description
-	MenuID          string                    // Menu ID for selection
-	MenuTitle       string                    // Menu title for interactive selection
-	CLITitle        string                    // Title for CLI execution (optional, defaults to MenuTitle)
-	Items           []SelectionItem           // Selectable items
-	Parameters      []ParameterDefinition     // Parameter definitions for validation
-	DirectFunction  InteractiveGoFunction     // Function for direct CLI execution with args
-	ExecuteFunction InteractiveGoFunction     // Function for menu-based execution
-	ExampleCommand  string                    // Custom example command prefix (optional, defaults to plugin name)
+	CommandName     string                // CLI command name
+	Description     string                // CLI command description
+	MenuID          string                // Menu ID for selection
+	MenuTitle       string                // Menu title for interactive selection
+	CLITitle        string                // Title for CLI execution (optional, defaults to MenuTitle)
+	Items           []SelectionItem       // Selectable items
+	Parameters      []ParameterDefinition // Parameter definitions for validation
+	DirectFunction  InteractiveGoFunction // Function for direct CLI execution with args
+	ExecuteFunction InteractiveGoFunction // Function for menu-based execution
+	ExampleCommand  string                // Custom example command prefix (optional, defaults to plugin name)
 }
 
 // convertToDirectExecutor converts an InteractiveGoFunction to work with DirectExecutor signature
 func convertToDirectExecutor(fn InteractiveGoFunction, cliTitle string, parameters []ParameterDefinition, pluginName string, exampleCommand string) func(ctx context.Context, outputChan chan<- string, inputChan <-chan string, args []string) error {
 	return func(ctx context.Context, outputChan chan<- string, inputChan <-chan string, args []string) error {
 		var params map[string]interface{}
-		
+
 		if len(parameters) > 0 {
 			// Use parameter validation if definitions are provided
 			validatedParams, err := ParseAndValidateArgs(args, parameters)
@@ -797,7 +798,7 @@ func convertToDirectExecutor(fn InteractiveGoFunction, cliTitle string, paramete
 				outputChan <- generateExamples(cliTitle, parameters, pluginName, exampleCommand)
 				return nil // Return nil to avoid "unexpected EOF" errors
 			}
-			
+
 			// Convert to interface{} map
 			params = make(map[string]interface{})
 			for key, value := range validatedParams {
@@ -811,12 +812,12 @@ func convertToDirectExecutor(fn InteractiveGoFunction, cliTitle string, paramete
 			}
 			params["cliArgs"] = strings.Join(args, " ")
 		}
-		
+
 		// Add CLI title to provide better context
 		if cliTitle != "" {
 			params["cliTitle"] = cliTitle
 		}
-		
+
 		return fn(ctx, outputChan, inputChan, params)
 	}
 }
@@ -824,41 +825,41 @@ func convertToDirectExecutor(fn InteractiveGoFunction, cliTitle string, paramete
 // generateUsageHelp creates a usage help string from parameter definitions
 func generateUsageHelp(commandTitle string, parameters []ParameterDefinition) string {
 	var help strings.Builder
-	
+
 	help.WriteString(fmt.Sprintf("Command: %s\n", commandTitle))
 	help.WriteString("\nParameters:\n")
-	
+
 	for _, param := range parameters {
 		required := ""
 		if param.Required {
 			required = " (required)"
 		}
-		
+
 		defaultVal := ""
 		if param.Default != "" {
 			defaultVal = fmt.Sprintf(" [default: %s]", param.Default)
 		}
-		
+
 		choices := ""
 		if len(param.Choices) > 0 {
 			choices = fmt.Sprintf(" [choices: %s]", strings.Join(param.Choices, ", "))
 		}
-		
-		help.WriteString(fmt.Sprintf("  --%s: %s%s%s%s\n", 
-			param.Name, 
-			param.Description, 
-			required, 
+
+		help.WriteString(fmt.Sprintf("  --%s: %s%s%s%s\n",
+			param.Name,
+			param.Description,
+			required,
 			defaultVal,
 			choices))
 	}
-	
+
 	return help.String()
 }
 
 // generateExamples creates usage examples from parameter definitions
 func generateExamples(commandTitle string, parameters []ParameterDefinition, pluginName string, exampleCommand string) string {
 	var examples strings.Builder
-	
+
 	// Use custom example command if provided, otherwise extract from title or use plugin name
 	var commandBase string
 	if exampleCommand != "" {
@@ -875,16 +876,16 @@ func generateExamples(commandTitle string, parameters []ParameterDefinition, plu
 			commandBase = "mops <plugin> <command>"
 		}
 	}
-	
+
 	// Find required parameters for minimal example
 	var requiredParams []ParameterDefinition
-	
+
 	for _, param := range parameters {
 		if param.Required {
 			requiredParams = append(requiredParams, param)
 		}
 	}
-	
+
 	// Generate minimal example with required parameters only
 	if len(requiredParams) > 0 {
 		example := commandBase
@@ -894,7 +895,7 @@ func generateExamples(commandTitle string, parameters []ParameterDefinition, plu
 		}
 		examples.WriteString("  " + example + "\n")
 	}
-	
+
 	// Generate full example with optional parameters
 	if len(parameters) > len(requiredParams) {
 		example := commandBase
@@ -904,7 +905,7 @@ func generateExamples(commandTitle string, parameters []ParameterDefinition, plu
 		}
 		examples.WriteString("  " + example + "\n")
 	}
-	
+
 	return examples.String()
 }
 
@@ -914,17 +915,17 @@ func getParameterExampleValue(param ParameterDefinition) string {
 	if param.ExampleValue != "" {
 		return param.ExampleValue
 	}
-	
+
 	// Use first choice if available
 	if len(param.Choices) > 0 {
 		return param.Choices[0]
 	}
-	
+
 	// Use default value if available
 	if param.Default != "" {
 		return param.Default
 	}
-	
+
 	// Generate completely generic examples based only on parameter type
 	switch param.Type {
 	case IntParam:
@@ -945,7 +946,7 @@ func getParameterExampleValue(param ParameterDefinition) string {
 // WithShellCommands adds multiple shell command menu entries
 func (b *PluginBuilder) WithShellCommands(commands map[string]ShellCommandEntry) *PluginBuilder {
 	var entries []MenuEntry
-	
+
 	for key, shellCmd := range commands {
 		entries = append(entries, MenuEntry{
 			Key:     key,
@@ -958,64 +959,9 @@ func (b *PluginBuilder) WithShellCommands(commands map[string]ShellCommandEntry)
 			},
 		})
 	}
-	
+
 	// Add these entries to the existing menu provider
 	return b.WithBasicMenuProvider(entries)
-}
-
-// WithResilientFunction adds a menu entry that handles command errors gracefully
-//
-// DEPRECATED: System-level safety net now handles all errors automatically.
-// Use regular AddInteractive() instead - all functions are now automatically resilient.
-func (b *PluginBuilder) WithResilientFunction(key, label string, fn InteractiveGoFunction) *PluginBuilder {
-	// With system-level safety net, this is equivalent to just adding the function directly
-	b.base.AddInteractiveFunction(key, fn)
-	
-	entry := MenuEntry{
-		Key:     key,
-		Label:   label,
-		Action:  "core_interactive-go",
-		Command: key,
-	}
-	
-	return b.WithBasicMenuProvider([]MenuEntry{entry})
-}
-
-// WithResilientShellCommand adds a shell command that won't crash the plugin on failure
-//
-// DEPRECATED: System-level safety net now handles all shell command errors automatically.
-// Use regular shell command patterns - failures will be handled gracefully by the system.
-func (b *PluginBuilder) WithResilientShellCommand(key, label, description, command string) *PluginBuilder {
-	shellFn := func(ctx context.Context, outputChan chan<- string, inputChan <-chan string, params map[string]interface{}) error {
-		// With system-level safety net, we can use simple error handling
-		// The system will convert any errors to user messages automatically
-		
-		// Create cross-plugin invoker
-		invoker := NewCrossPluginInvoker(ctx, outputChan, inputChan)
-		
-		// Use invoker to call core shell command
-		outputChan <- fmt.Sprintf("🐚 Executing: %s", command)
-		outputChan <- ""
-		
-		result, err := invoker.InvokeFunction("core_shell-command", map[string]interface{}{
-			"command": command,
-		})
-		
-		if err != nil {
-			// System safety net will handle this error gracefully
-			return fmt.Errorf("failed to invoke shell command: %w", err)
-		}
-		
-		if !result.Success && result.Error != nil {
-			// System safety net will handle this error gracefully
-			return fmt.Errorf("shell command failed: %w", result.Error)
-		}
-		
-		outputChan <- "✅ Command completed successfully"
-		return nil
-	}
-	
-	return b.WithResilientFunction(key, label, shellFn)
 }
 
 // WithShellCommand adds a single shell command menu entry
@@ -1039,7 +985,7 @@ type ShellCommandEntry struct {
 // CheckboxItem represents an item in a checkbox menu
 type CheckboxItem struct {
 	Key         string                 // Item key/identifier
-	Label       string                 // Item display label  
+	Label       string                 // Item display label
 	Description string                 // Item description
 	Params      map[string]interface{} // Parameters to pass when selected
 	IsChecked   bool                   // Initial checked state
@@ -1050,28 +996,28 @@ func (b *PluginBuilder) WithCheckboxMenu(menuID, title string, items []CheckboxI
 	if executeKey == "" {
 		executeKey = "e" // Default execute key
 	}
-	
+
 	// Register the execute function with proper naming
 	executeFunctionName := b.getStandardName(fmt.Sprintf("%s_execute", menuID))
 	b.WithInteractiveFunction(executeFunctionName, executeFunction)
-	
+
 	// Create the checkbox menu provider
 	return b.WithMenuProvider(menuID, menuID, title, func(param string) ([]MenuEntry, error) {
 		var entries []MenuEntry
-		
+
 		// Add checkbox entries - use standard actions that MOPS core understands
 		for i, item := range items {
 			entries = append(entries, MenuEntry{
-				Key:         fmt.Sprintf("%d", i+1),
-				Label:       item.Label,
-				Message:     item.Description,
-				Action:      "noop", // Use noop action - checkbox behavior is handled by IsCheckbox flag
-				Params:      item.Params,
-				IsCheckbox:  true,
-				IsChecked:   item.IsChecked,
+				Key:        fmt.Sprintf("%d", i+1),
+				Label:      item.Label,
+				Message:    item.Description,
+				Action:     "noop", // Use noop action - checkbox behavior is handled by IsCheckbox flag
+				Params:     item.Params,
+				IsCheckbox: true,
+				IsChecked:  item.IsChecked,
 			})
 		}
-		
+
 		// Add execute entry
 		entries = append(entries, MenuEntry{
 			Key:     executeKey,
@@ -1080,7 +1026,7 @@ func (b *PluginBuilder) WithCheckboxMenu(menuID, title string, items []CheckboxI
 			Action:  "core_interactive-go",
 			Command: executeFunctionName,
 		})
-		
+
 		return entries, nil
 	})
 }
@@ -1120,16 +1066,16 @@ func (b *PluginBuilder) WithFavoritesMenu(config FavoritesConfig) *PluginBuilder
 	// Create a menu provider that generates the favorites menu
 	b.base.WithSimpleProvider(config.MenuID, func(param string) ([]MenuEntry, error) {
 		var entries []MenuEntry
-		
+
 		// Generate menu entries - favorites state will be read from config during rendering
 		for i, item := range config.Items {
 			// Create checkbox-style entry for favorites toggle
 			entries = append(entries, MenuEntry{
-				Key:       fmt.Sprintf("%d", i+1),
-				Label:     item.Label, // Let checkbox system handle the icons
-				Message:   fmt.Sprintf("Toggle favorite status for %s", item.Label),
-				Action:    "noop", // Use noop action for checkbox behavior
-				Params:    mergeMaps(item.Params, map[string]interface{}{
+				Key:     fmt.Sprintf("%d", i+1),
+				Label:   item.Label, // Let checkbox system handle the icons
+				Message: fmt.Sprintf("Toggle favorite status for %s", item.Label),
+				Action:  "noop", // Use noop action for checkbox behavior
+				Params: mergeMaps(item.Params, map[string]interface{}{
 					"item":               item.Key,
 					"item_label":         item.Label,
 					"is_favorite_toggle": true, // Special flag to identify this as a favorite
@@ -1153,7 +1099,7 @@ func (b *PluginBuilder) WithFavoritesMenu(config FavoritesConfig) *PluginBuilder
 
 		return entries, nil
 	})
-	
+
 	return b
 }
 
@@ -1171,14 +1117,15 @@ func mergeMaps(map1, map2 map[string]interface{}) map[string]interface{} {
 
 // FavoritesHelper provides common functionality for working with favorites across plugins
 // Example usage:
-//   var favoritesHelper = sdk.NewFavoritesHelper("my-plugin", map[string]string{
-//       "item1": "Item One",
-//       "item2": "Item Two",
-//   })
-//   
-//   // Use in plugin builder:
-//   .AddInteractive(sdk.StreamingAction("favorites-summary", "Favorites summary", 
-//       "my-plugin_favorites-summary", favoritesHelper.CreateFavoritesSummaryFunction(getCurrentPluginConfig)))
+//
+//	var favoritesHelper = sdk.NewFavoritesHelper("my-plugin", map[string]string{
+//	    "item1": "Item One",
+//	    "item2": "Item Two",
+//	})
+//
+//	// Use in plugin builder:
+//	.AddInteractive(sdk.StreamingAction("favorites-summary", "Favorites summary",
+//	    "my-plugin_favorites-summary", favoritesHelper.CreateFavoritesSummaryFunction(getCurrentPluginConfig)))
 type FavoritesHelper struct {
 	pluginName string
 	items      map[string]string // key -> label mapping
@@ -1197,7 +1144,7 @@ func (f *FavoritesHelper) GetCurrentFavorites(pluginConfig map[string]interface{
 	if pluginConfig == nil {
 		return []string{}
 	}
-	
+
 	// Read favorites from config
 	if favorites, exists := pluginConfig["favorites"]; exists {
 		switch favs := favorites.(type) {
@@ -1214,7 +1161,7 @@ func (f *FavoritesHelper) GetCurrentFavorites(pluginConfig map[string]interface{
 			return favs
 		}
 	}
-	
+
 	return []string{}
 }
 
@@ -1222,13 +1169,13 @@ func (f *FavoritesHelper) GetCurrentFavorites(pluginConfig map[string]interface{
 func (f *FavoritesHelper) GetFavorites(pluginConfig map[string]interface{}) map[string]string {
 	currentFavorites := f.GetCurrentFavorites(pluginConfig)
 	favorites := make(map[string]string)
-	
+
 	for _, favKey := range currentFavorites {
 		if label, exists := f.items[favKey]; exists {
 			favorites[favKey] = label
 		}
 	}
-	
+
 	return favorites
 }
 
@@ -1239,14 +1186,14 @@ func (f *FavoritesHelper) GetNonFavorites(pluginConfig map[string]interface{}) m
 	for _, fav := range currentFavorites {
 		favoritesSet[fav] = true
 	}
-	
+
 	nonFavorites := make(map[string]string)
 	for key, label := range f.items {
 		if !favoritesSet[key] {
 			nonFavorites[key] = label
 		}
 	}
-	
+
 	return nonFavorites
 }
 
@@ -1258,7 +1205,7 @@ func (f *FavoritesHelper) DisplayFavoritesSummary(pluginConfig map[string]interf
 
 	favorites := f.GetFavorites(pluginConfig)
 	nonFavorites := f.GetNonFavorites(pluginConfig)
-	
+
 	// Show favorites
 	if len(favorites) > 0 {
 		outputChan <- "⭐ Current Favorites:"
@@ -1268,9 +1215,9 @@ func (f *FavoritesHelper) DisplayFavoritesSummary(pluginConfig map[string]interf
 	} else {
 		outputChan <- "⭐ Current Favorites: None"
 	}
-	
+
 	outputChan <- ""
-	
+
 	// Show non-favorites
 	if len(nonFavorites) > 0 {
 		outputChan <- "☆ Non-Favorites:"

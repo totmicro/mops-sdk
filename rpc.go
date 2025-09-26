@@ -15,17 +15,26 @@ import (
 )
 
 // isPluginUnavailableError checks if the error indicates the plugin is temporarily unavailable
+// This should only return true for actual RPC/network communication errors, NOT function execution errors
 func isPluginUnavailableError(err error) bool {
 	if err == nil {
 		return false
 	}
 	errStr := err.Error()
-	// Common RPC errors when plugin is unavailable
-	return strings.Contains(errStr, "EOF") ||
-		strings.Contains(errStr, "connection refused") ||
+	
+	// Only treat as unavailable if it's clearly a network/RPC communication error
+	// We need to be more specific to avoid hiding legitimate function errors
+	return strings.Contains(errStr, "connection refused") ||
 		strings.Contains(errStr, "broken pipe") ||
 		strings.Contains(errStr, "connection reset by peer") ||
-		strings.Contains(errStr, "use of closed network connection")
+		strings.Contains(errStr, "use of closed network connection") ||
+		strings.Contains(errStr, "rpc: can't find") ||
+		strings.Contains(errStr, "plugin process") ||
+		strings.Contains(errStr, "no such file or directory") && strings.Contains(errStr, "plugin")
+	
+	// DO NOT treat these as unavailable - they could be legitimate function errors:
+	// - "EOF" - could be from command output
+	// - General error strings that might appear in function return values
 }
 
 // wrapPluginUnavailableError wraps RPC errors with a more user-friendly message
@@ -772,13 +781,60 @@ func (s *PluginRPCServer) InitInteractiveStream(args *InteractiveStreamInitArgs,
 			session.mu.Unlock()
 		}()
 
-		err := fn(session.Context, session.OutputChan, session.InputChan, session.Params)
+		// SERVER-SIDE SAFETY NET: Prevent function errors from breaking RPC connection
+		var functionError error
+		func() {
+			// Add panic recovery to prevent RPC connection breaks from panics
+			defer func() {
+				if r := recover(); r != nil {
+					session.OutputChan <- "❌ Function encountered an unexpected panic but was handled gracefully"
+					// Use simple string conversion instead of fmt.Sprintf to avoid RPC issues
+					panicStr := "unknown panic"
+					if r != nil {
+						switch v := r.(type) {
+						case string:
+							panicStr = v
+						case error:
+							panicStr = v.Error()
+						default:
+							panicStr = "panic occurred"
+						}
+					}
+					session.OutputChan <- "   Panic details: " + panicStr
+					session.OutputChan <- "💡 Plugin remains available - this panic was isolated by the server-side safety net"
+					functionError = nil // Don't propagate panics as RPC failures
+				}
+			}()
+			
+			// Call the original function
+			functionError = fn(session.Context, session.OutputChan, session.InputChan, session.Params)
+		}()
+		
+		// Handle function errors gracefully without breaking RPC connection
+		if functionError != nil {
+			// Send error details to output channel so user sees them
+			// IMPORTANT: Use simple string conversion to avoid RPC serialization issues
+			errorStr := "unknown error"
+			if functionError != nil {
+				errorStr = functionError.Error() // Use .Error() method instead of fmt.Sprintf
+			}
+			
+			session.OutputChan <- "❌ Command/Function failed with error:"
+			session.OutputChan <- "   " + errorStr  // Simple string concatenation instead of fmt.Sprintf
+			session.OutputChan <- ""
+			session.OutputChan <- "💡 This error was handled gracefully by the server-side safety net"
+			session.OutputChan <- "🛡️  Plugin remains fully operational - you can continue using other functions"
+			
+			// CRITICAL: Don't store the error or send it to ErrorChan
+			// This prevents RPC connection breaks
+			functionError = nil
+		}
 
 		session.mu.Lock()
-		session.FinalError = err
+		session.FinalError = functionError  // This should now always be nil
 		session.mu.Unlock()
 
-		session.ErrorChan <- err
+		session.ErrorChan <- functionError  // This should now always be nil
 	}()
 
 	// Start output collection goroutine
